@@ -2039,18 +2039,37 @@ pub fn toolbar(
     let p = ui.painter().clone();
     let top = o.y + MENU_H;
     let c = crate::theme::colors();
-    fill(&p, o.x, top, o.x + width - 1.0, top, c.toolbar_line);
-    fill(
-        &p,
-        o.x,
-        top + 1.0,
-        o.x + width - 1.0,
-        top + 1.0,
-        c.toolbar_line_light,
-    );
+    // Glass (Liquid Glass): no etched band, capsules under the pointer, the labels
+    // in the interface's font under smaller icons.
+    let glass = crate::theme::current().controls.toolbar == crate::palette::ToolbarLook::Glass;
+    if !glass {
+        fill(&p, o.x, top, o.x + width - 1.0, top, c.toolbar_line);
+        fill(
+            &p,
+            o.x,
+            top + 1.0,
+            o.x + width - 1.0,
+            top + 1.0,
+            c.toolbar_line_light,
+        );
+    }
     // Both modes (light-main.md; dark changes only colours): Tahoma labels, 66 px buttons, a
     // 68 px band.
-    let (font, base_w, band_h) = (winui::tahoma(), 66.0f32, 68.0);
+    let (font, base_w, band_h) = if glass {
+        (
+            egui::FontId::proportional(crate::theme::font_size(crate::theme::metrics().font_small)),
+            62.0f32,
+            68.0,
+        )
+    } else {
+        (winui::tahoma(), 66.0f32, 68.0)
+    };
+    // Glass: the capsules' corners, and a few pixels between buttons so the capsules don't touch.
+    let (corner, inset) = if glass {
+        (crate::theme::metrics().control_radius.max(8.0), 3.0)
+    } else {
+        (0.0, 0.0)
+    };
     let band = Rect::from_min_size(pos2(o.x, top + 2.0), vec2(width, band_h));
     p.rect_filled(band, 0.0, WINDOW_BG());
     let mut x = o.x;
@@ -2151,13 +2170,17 @@ pub fn toolbar(
         // any button's, below).
         if *on == Some(true) && !resp.hovered() {
             let rc = winui::rect(Rect::from_min_size(pos2(x, band.top()), vec2(bw, 65.0)));
-            p.rect_filled(rc, 0.0, c.toolbar_pressed);
-            p.rect_stroke(
-                rc,
-                0.0,
-                egui::Stroke::new(1.0, c.toolbar_hot_border),
-                egui::StrokeKind::Inside,
-            );
+            if glass {
+                p.rect_filled(rc.shrink2(vec2(inset, inset)), corner, c.toolbar_pressed);
+            } else {
+                p.rect_filled(rc, 0.0, c.toolbar_pressed);
+                p.rect_stroke(
+                    rc,
+                    0.0,
+                    egui::Stroke::new(1.0, c.toolbar_hot_border),
+                    egui::StrokeKind::Inside,
+                );
+            }
         }
         if *enabled && resp.hovered() {
             // Hover (IDM 6.42, captured 2026-10-30): the button's own width, from the band's top,
@@ -2189,17 +2212,29 @@ pub fn toolbar(
                     (true, false) => hot_c,
                     (false, _) => faint_c,
                 };
-                p.rect_filled(r, 0.0, c);
-                // None in the dark look (a transparent border isn't drawn).
-                p.rect_stroke(
-                    r,
-                    0.0,
-                    egui::Stroke::new(1.0, border_c),
-                    egui::StrokeKind::Inside,
-                );
+                let r = if glass {
+                    r.shrink2(vec2(inset, inset))
+                } else {
+                    r
+                };
+                p.rect_filled(r, corner, c);
+                // None in the dark look (a transparent border isn't drawn); glass has none.
+                if !glass {
+                    p.rect_stroke(
+                        r,
+                        0.0,
+                        egui::Stroke::new(1.0, border_c),
+                        egui::StrokeKind::Inside,
+                    );
+                }
             };
-            lit(main, !on_arrow);
-            if dropdown {
+            // Glass: one capsule over the whole split button, its parts not lit apart.
+            if glass {
+                lit(main.union(arrow), true);
+            } else {
+                lit(main, !on_arrow);
+            }
+            if dropdown && !glass {
                 lit(arrow, on_arrow);
                 // The divider: the parts' shared edge, one line.
                 winui::fill_l(
@@ -2218,7 +2253,12 @@ pub fn toolbar(
             vec2(32.0, 32.0),
         )
         .translate(vec2(0.0, 0.0));
-        let icon_rect = Rect::from_center_size(pos2(cx, top + 25.5), icon_rect.size());
+        // Glass: 24-pixel line icons, nearer the label, as macOS's toolbars draw theirs.
+        let icon_rect = if glass {
+            Rect::from_center_size(pos2(cx, top + 28.0), vec2(24.0, 24.0))
+        } else {
+            Rect::from_center_size(pos2(cx, top + 25.5), icon_rect.size())
+        };
         // Placed, not mirrored: an icon keeps its look.
         icon.image(*enabled).paint_at(ui, winui::rect(icon_rect));
         // Label: x = btn.x + floor((w − ext)/2), +1 for drop-downs, last ink row 58. Every label
@@ -2242,7 +2282,7 @@ pub fn toolbar(
             // The split's divider at rest (user choice 2026-10-29, "B"): a classic etched
             // toolbar separator — a shadow line and a highlight beside it — 24 px tall, centred
             // on the arrow; the hover draws the full divider instead.
-            if !(*enabled && resp.hovered()) {
+            if !glass && !(*enabled && resp.hovered()) {
                 let (shadow, light) = (c.toolbar_split_shadow, c.toolbar_split_light);
                 let (y0, y1) = (ay - 10.0, ay + 13.0);
                 winui::fill_l(&p, x + bw - 1.0, y0, x + bw - 1.0, y1, shadow);
@@ -2592,8 +2632,14 @@ pub fn categories(
     // Where the selected row is, for its menu from the keyboard (Shift+F10, the Menu key).
     let mut selected_at: Option<(usize, Pos2)> = None;
 
-    // Connector dots (#6d6d6d, every other pixel), painted first; expander boxes cover them.
-    let roots: Vec<usize> = (0..rows.len()).filter(|&k| rows[k].level == 0).collect();
+    // Connector dots (#6d6d6d, every other pixel), painted first; expander boxes cover them. A
+    // sidebar (Liquid Glass) has none.
+    let sidebar = crate::theme::current().controls.tree == crate::palette::TreeLook::Sidebar;
+    let roots: Vec<usize> = if sidebar {
+        Vec::new()
+    } else {
+        (0..rows.len()).filter(|&k| rows[k].level == 0).collect()
+    };
     if let (Some(&first), Some(&last)) = (roots.first(), roots.last()) {
         let mut y = row_top(first);
         while y <= row_top(last) + 8.0 {
@@ -2611,7 +2657,7 @@ pub fn categories(
         }
     }
     for (k, r) in rows.iter().enumerate() {
-        if r.level == 1 {
+        if r.level == 1 && !sidebar {
             let mut x = o.x + 38.0;
             while x <= o.x + 48.0 {
                 winui::px_l(&tp, x, row_top(k) + 8.0, TREE_LINES());
@@ -2643,7 +2689,18 @@ pub fn categories(
         let icon_x = o.x + if r.level == 0 { 30.0 } else { 49.0 };
         let text_x = o.x + if r.level == 0 { 51.0 } else { 70.0 };
         let ext = text_width_font(&p, winui::tahoma(), crate::i18n::t(&r.label));
-        if r.selected {
+        if r.selected && sidebar {
+            // A sidebar's selection: a rounded band across the row, the accent faint.
+            let band = Rect::from_min_max(
+                pos2(o.x + 4.0, top - 1.0),
+                pos2(area.right() - 4.0, top + 16.0),
+            );
+            tp.rect_filled(
+                winui::rect(band),
+                crate::theme::metrics().menu_item_radius,
+                crate::theme::colors().toolbar_pressed,
+            );
+        } else if r.selected {
             // The inactive selection grey behind the label, in both modes (#f0f0f0 on the white
             // tree could not be seen).
             winui::fill_l(

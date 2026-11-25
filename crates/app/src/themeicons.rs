@@ -565,6 +565,46 @@ static SETS: LazyLock<Mutex<HashMap<String, Arc<Set>>>> = LazyLock::new(|| {
             "tb-scheduler.png", "tb-start-queue.png", "tb-stop-all.png", "tb-stop-queue.png",
             "tb-stop.png", "ui-to-tray.png"]);
     sets.insert("aqua".to_owned(), Arc::new(Set::from_files(aqua, false)));
+    // Lucide 1.80.0 (ISC, assets/themes/liquid-glass/icons/LICENSE), made by
+    // tools/themes/lucide_set.py: file types, categories and states in their own colours, the
+    // toolbar's and the rest one colour, tinted.
+    let liquid_glass = builtin_files!("liquid-glass";
+        16: ["cat-all.svg", "cat-compressed.svg", "cat-documents.svg", "cat-finished.svg",
+            "cat-folder-open.svg", "cat-folder.svg", "cat-music.svg", "cat-programs.svg",
+            "cat-queues.svg", "cat-torrents.svg", "cat-unfinished.svg", "cat-video.svg",
+            "ft-archive.svg", "ft-audio.svg", "ft-code.svg", "ft-disk-image.svg",
+            "ft-document.svg", "ft-executable.svg", "ft-font.svg", "ft-generic.svg",
+            "ft-image.svg", "ft-pdf.svg", "ft-presentation.svg", "ft-spreadsheet.svg",
+            "ft-text.svg", "ft-torrent.svg", "ft-video.svg", "misc-down-symbolic.svg",
+            "misc-emblem-ok.svg", "misc-remove-symbolic.svg", "misc-up-symbolic.svg",
+            "st-complete.svg", "st-downloading.svg", "st-error.svg", "st-paused.svg",
+            "st-queued.svg", "st-seeding.svg", "tb-add-torrent-symbolic.svg",
+            "tb-add-url-symbolic.svg", "tb-delete-completed-symbolic.svg",
+            "tb-delete-symbolic.svg", "tb-options-symbolic.svg", "tb-resume-symbolic.svg",
+            "tb-scheduler-symbolic.svg", "tb-start-queue-symbolic.svg",
+            "tb-stop-all-symbolic.svg", "tb-stop-queue-symbolic.svg", "tb-stop-symbolic.svg",
+            "ui-close-symbolic.svg", "ui-maximize-symbolic.svg", "ui-minimize-symbolic.svg",
+            "ui-restore-symbolic.svg", "ui-to-tray-symbolic.svg"];
+        24: ["cat-all.svg", "cat-compressed.svg", "cat-documents.svg", "cat-finished.svg",
+            "cat-folder-open.svg", "cat-folder.svg", "cat-music.svg", "cat-programs.svg",
+            "cat-queues.svg", "cat-torrents.svg", "cat-unfinished.svg", "cat-video.svg",
+            "ft-archive.svg", "ft-audio.svg", "ft-code.svg", "ft-disk-image.svg",
+            "ft-document.svg", "ft-executable.svg", "ft-font.svg", "ft-generic.svg",
+            "ft-image.svg", "ft-pdf.svg", "ft-presentation.svg", "ft-spreadsheet.svg",
+            "ft-text.svg", "ft-torrent.svg", "ft-video.svg", "misc-down-symbolic.svg",
+            "misc-emblem-ok.svg", "misc-remove-symbolic.svg", "misc-up-symbolic.svg",
+            "st-complete.svg", "st-downloading.svg", "st-error.svg", "st-paused.svg",
+            "st-queued.svg", "st-seeding.svg", "tb-add-torrent-symbolic.svg",
+            "tb-add-url-symbolic.svg", "tb-delete-completed-symbolic.svg",
+            "tb-delete-symbolic.svg", "tb-options-symbolic.svg", "tb-resume-symbolic.svg",
+            "tb-scheduler-symbolic.svg", "tb-start-queue-symbolic.svg",
+            "tb-stop-all-symbolic.svg", "tb-stop-queue-symbolic.svg", "tb-stop-symbolic.svg",
+            "ui-close-symbolic.svg", "ui-maximize-symbolic.svg", "ui-minimize-symbolic.svg",
+            "ui-restore-symbolic.svg", "ui-to-tray-symbolic.svg"]);
+    sets.insert(
+        "liquid-glass".to_owned(),
+        Arc::new(Set::from_files(liquid_glass, false)),
+    );
     Mutex::new(sets)
 });
 
@@ -833,12 +873,38 @@ mod tests {
         }
     }
 
+    /// Liquid Glass (Lucide) has a drawing for every need at 16 and 24 pixels: the file types,
+    /// categories and states in their own colours, the toolbar's and the rest one colour.
+    #[test]
+    fn liquid_glass_has_every_need_from_lucide() {
+        let set = set("liquid-glass").unwrap();
+        for (need, _) in NEEDS {
+            for px in [16, 24] {
+                let f = set.files.get(&((*need).to_owned(), px));
+                let f = f.unwrap_or_else(|| panic!("liquid-glass {need} {px}"));
+                assert!(!f.png, "{need} {px}");
+                let coloured = ["ft-", "cat-", "st-", "misc-emblem"]
+                    .iter()
+                    .any(|p| need.starts_with(p));
+                assert_eq!(f.mono, !coloured, "{need} {px}");
+            }
+        }
+    }
+
     /// Every file in a built-in set's folders is named for a need MDM asks for, and is in the
     /// program (the lists above match the folders).
     #[test]
     fn every_built_in_icon_file_is_a_need_and_carried() {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/themes");
-        for name in ["metro", "adwaita", "breeze", "luna", "aero", "aqua"] {
+        for name in [
+            "metro",
+            "adwaita",
+            "breeze",
+            "luna",
+            "aero",
+            "aqua",
+            "liquid-glass",
+        ] {
             let carried = set(name).unwrap();
             let mut n = 0;
             for px in SIZES {
@@ -870,7 +936,15 @@ mod tests {
     /// drawing's largest scales cleanly), so no picture is stretched.
     #[test]
     fn pictures_come_in_every_size_the_loader_asks_for() {
-        for name in ["metro", "adwaita", "breeze", "luna", "aero", "aqua"] {
+        for name in [
+            "metro",
+            "adwaita",
+            "breeze",
+            "luna",
+            "aero",
+            "aqua",
+            "liquid-glass",
+        ] {
             let set = set(name).unwrap();
             for (need, _) in NEEDS {
                 let sizes: Vec<u32> = SIZES

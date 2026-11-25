@@ -1,0 +1,6 @@
+The Liquid Glass theme's icon set.
+
+Lucide 1.80.0 (https://lucide.dev), ISC licence (LICENSE beside this file), made by
+tools/themes/lucide_set.py: each file is one Lucide icon, its strokes set in a colour
+(file types, categories, states) or in white, which MDM tints with the theme's text
+colour (`-symbolic`). Which icon each need is: NEEDS in that script.

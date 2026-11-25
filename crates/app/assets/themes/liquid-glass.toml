@@ -1,0 +1,83 @@
+# Liquid Glass: one of Mister Download Manager's built-in themes, after the feel of macOS 26's
+# design (2025): light, airy surfaces, generous round corners, controls that sit like capsules,
+# one blue accent, and line icons from Lucide (ISC, assets/themes/liquid-glass/icons/LICENSE),
+# coloured by what they stand for. Drawn by MDM: no picture, font or icon of Apple's.
+#
+# On macOS the window itself shows the system's glass behind it (unix.rs `glass_window`); on
+# Windows and Linux the same colours stand on their own.
+
+name = "Liquid Glass"
+icons = "mono"
+icon-set = "liquid-glass"
+
+[controls]
+field-focus = "ring"
+check = "adwaita"
+button = "fluent"
+progress = "line"
+scroll = "overlay"
+caption = "system"
+focus = "ring"
+toolbar = "glass"
+list-progress = "bar"
+tree = "sidebar"
+
+[sizes]
+radius = 10
+"radius.button" = 10
+"radius.part" = 6
+"radius.check" = 5
+"radius.flyout" = 12
+"radius.menu-item" = 6
+"radius.egui" = 8
+"radius.popup" = 10
+border = 1
+"focus-line" = 2
+"font.ui" = 13
+"list.row" = 24
+"list.header" = 26
+
+[seeds.light]
+background = "#eef1f6"
+surface = "#fbfcfe"
+header = "#f4f6fa"
+text = "#1d1d1f"
+accent = "#0a64d8"
+selection = "#0a64d8"
+error = "#c42b1c"
+warning = "#8a5300"
+success = "#1a7340"
+
+[seeds.dark]
+background = "#1c1d22"
+surface = "#24262c"
+header = "#202227"
+text = "#f5f5f7"
+accent = "#3b8cf6"
+selection = "#3b8cf6"
+error = "#ff8f80"
+warning = "#f7c35c"
+success = "#5fcf86"
+
+[light]
+# The Categories tree's expanders: chevrons, as a Mac sidebar's.
+tree-chevrons = true
+# The Source chips quieter than the classic look's: deep tones, white text (4.5:1 and more).
+"chip.web" = "#2b7a52"
+"chip.torrent" = "#6c47b8"
+# The toolbar's capsule under the pointer, and pressed: the accent, faint.
+"toolbar.hot" = "#0a64d81a"
+"toolbar.hot.faint" = "#0a64d80d"
+"toolbar.pressed" = "#0a64d82e"
+# The list's grid all but gone, as a Mac list's: the rows still read apart.
+"list.grid" = "#0000000a"
+"list.frame" = "#d5dae3"
+
+[dark]
+"chip.web" = "#2b7a52"
+"chip.torrent" = "#6c47b8"
+"toolbar.hot" = "#3b8cf62b"
+"toolbar.hot.faint" = "#3b8cf614"
+"toolbar.pressed" = "#3b8cf640"
+"list.grid" = "#ffffff0f"
+"list.frame" = "#3a3d45"

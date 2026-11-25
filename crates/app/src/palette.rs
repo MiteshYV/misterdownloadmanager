@@ -448,6 +448,39 @@ pub struct Controls {
     /// The menus' and the menu bar's font: the system's interface font (Segoe UI on Windows),
     /// or Tahoma, as Windows XP's menus were.
     pub ui_font: UiFont,
+    /// The main toolbar: IDM's square buttons on an etched band, or glass (rounded capsules
+    /// under the pointer, no etched lines, labels in the interface's font).
+    pub toolbar: ToolbarLook,
+    /// A downloading row's Status cell: its percent as text, or the percent and a bar.
+    pub list_progress: ListProgress,
+    /// The Categories tree: Explorer's (dotted connectors, the selection behind the label), or
+    /// a sidebar's (no connectors, the selection a rounded band across the row).
+    pub tree: TreeLook,
+}
+/// How the Categories tree is drawn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TreeLook {
+    /// Explorer's: dotted connectors, the selected row's label on grey.
+    Classic,
+    /// A Mac sidebar's: no connectors, the selected row a rounded band in the accent, faint.
+    Sidebar,
+}
+/// How the main toolbar is drawn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ToolbarLook {
+    /// IDM's: Tahoma labels under 32-pixel icons, square hover, an etched band.
+    Classic,
+    /// macOS 26's: smaller icons, the label in the interface's font, a rounded capsule under
+    /// the pointer, the band in the window's own colour (glass shows through it on macOS).
+    Glass,
+}
+/// How a downloading row shows how far it is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ListProgress {
+    /// The percent, as text (IDM's).
+    Text,
+    /// The percent and a thin rounded bar after it in the Status cell.
+    Bar,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -578,6 +611,9 @@ impl Controls {
         button: ButtonLook::Fluent,
         header: HeaderLook::Flat,
         ui_font: UiFont::System,
+        toolbar: ToolbarLook::Classic,
+        list_progress: ListProgress::Text,
+        tree: TreeLook::Classic,
     };
 
     /// Sets the control with this key to the style named `value`; false when either is unknown.
@@ -619,6 +655,12 @@ impl Controls {
             ("focus", "dotted") => self.focus = FocusLook::Dotted,
             ("focus", "ring") => self.focus = FocusLook::Ring,
             ("focus", "frame") => self.focus = FocusLook::Frame,
+            ("toolbar", "classic") => self.toolbar = ToolbarLook::Classic,
+            ("toolbar", "glass") => self.toolbar = ToolbarLook::Glass,
+            ("list-progress", "text") => self.list_progress = ListProgress::Text,
+            ("list-progress", "bar") => self.list_progress = ListProgress::Bar,
+            ("tree", "classic") => self.tree = TreeLook::Classic,
+            ("tree", "sidebar") => self.tree = TreeLook::Sidebar,
             _ => return false,
         }
         true
@@ -665,7 +707,7 @@ pub static CLASSIC: Theme = Theme {
 /// (written out above), then the ones shipped as theme files (`assets/themes/`, in the format
 /// users write, so they double as examples). Native follows the system and is made when chosen
 /// (`crate::native`).
-pub fn builtins() -> [&'static Theme; 9] {
+pub fn builtins() -> [&'static Theme; 10] {
     static HIGH_CONTRAST: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
         crate::themefile::builtin(
             "high-contrast",
@@ -694,6 +736,12 @@ pub fn builtins() -> [&'static Theme; 9] {
     static EMERALD: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
         crate::themefile::builtin("emerald", include_str!("../assets/themes/emerald.toml"))
     });
+    static LIQUID_GLASS: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
+        crate::themefile::builtin(
+            "liquid-glass",
+            include_str!("../assets/themes/liquid-glass.toml"),
+        )
+    });
     [
         &CLASSIC,
         &HIGH_CONTRAST,
@@ -704,6 +752,7 @@ pub fn builtins() -> [&'static Theme; 9] {
         &AERO,
         &AQUA,
         &EMERALD,
+        &LIQUID_GLASS,
     ]
 }
 
@@ -915,6 +964,11 @@ mod tests {
                 "emerald",
                 "Emerald",
                 include_str!("../assets/themes/emerald.toml"),
+            ),
+            (
+                "liquid-glass",
+                "Liquid Glass",
+                include_str!("../assets/themes/liquid-glass.toml"),
             ),
         ] {
             let v: serde_json::Value = toml::from_str(text).unwrap();

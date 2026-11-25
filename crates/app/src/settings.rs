@@ -205,6 +205,14 @@ impl DebridAccount {
     }
 }
 
+/// A new copy's theme: Liquid Glass on macOS (the system's own look there), the classic one
+/// elsewhere. A copy set up before keeps the theme it has.
+pub const DEFAULT_THEME: &str = if cfg!(target_os = "macos") {
+    "liquid-glass"
+} else {
+    "classic"
+};
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -662,7 +670,7 @@ impl Default for Settings {
             view: None,
             dark_mode_support: true,
             always_dark: false,
-            theme: "classic".into(),
+            theme: DEFAULT_THEME.into(),
             renderer: None,
             window_system: None,
             interface_size: 100,

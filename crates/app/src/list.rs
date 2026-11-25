@@ -21,6 +21,20 @@ pub fn row_h() -> f32 {
     crate::theme::metrics().list_row
 }
 
+/// The classic row's height, which the row's contents (a 16-pixel icon, text on a baseline 12
+/// pixels down) were laid out for.
+const CLASSIC_ROW: f32 = 17.0;
+
+/// How far a row's contents move down in a theme whose rows are taller than the classic ones
+/// (Emerald's 19, Liquid Glass's 24), so they sit in its middle rather than at its top.
+pub fn row_slack() -> f32 {
+    row_slack_for(row_h())
+}
+
+fn row_slack_for(row: f32) -> f32 {
+    ((row - CLASSIC_ROW) / 2.0).max(0.0).round()
+}
+
 // The active theme's colours (crate::palette, #45).
 themed! {
     /// The list's border (it was #828790 in dark too): the lists' and tables' one edge.
@@ -1091,7 +1105,7 @@ pub fn show(
             for (c, x0, x1) in &cols {
                 // The file-type icon sits in the File Name column, wherever it is.
                 let tx = if *c == 0 {
-                    icons.paint_in(ui, &bp, row.icon.clone(), pos2(x0 + 4.0, top));
+                    icons.paint_in(ui, &bp, row.icon.clone(), pos2(x0 + 4.0, top + row_slack()));
                     x0 + 22.0
                 } else if *c == STATUS && row.private.is_some() {
                     // A private window's download (#1581): a mask before its status, in the
@@ -1103,7 +1117,7 @@ pub fn show(
                         &bp.with_clip_rect(screen(cell.intersect(body))),
                         crate::icons::private_mark(ink),
                         screen(Rect::from_min_size(
-                            pos2(x0 + 4.0, top),
+                            pos2(x0 + 4.0, top + row_slack()),
                             egui::vec2(16.0, 16.0),
                         )),
                     );
@@ -1116,7 +1130,7 @@ pub fn show(
                         ui,
                         &bp,
                         IconKey::Silk("page_white_stack"),
-                        pos2(x0 + 2.0, top),
+                        pos2(x0 + 2.0, top + row_slack()),
                     );
                 }
                 let cell = Rect::from_min_max(pos2(*x0, top), pos2(*x1 - 1.0, top + row_h()));
@@ -1178,7 +1192,23 @@ pub fn show(
                 } else {
                     TEXT()
                 };
-                text_font(&clip, font.clone(), tx, top + 12.0, &s, ink);
+                text_font(&clip, font.clone(), tx, top + 12.0 + row_slack(), &s, ink);
+                // Liquid Glass: an unfinished download's Status shows a bar after its percent.
+                if *c == STATUS
+                    && let Some(frac) = row.progress
+                    && crate::theme::current().controls.list_progress
+                        == crate::palette::ListProgress::Bar
+                {
+                    let after = tx + winui::text_width_font(&bp, font.clone(), &s).round() + 8.0;
+                    if let Some(bar) = status_bar(after, *x1 - 8.0, top) {
+                        let fill = if row.status_group == "Downloading" {
+                            crate::theme::colors().progress_bar
+                        } else {
+                            crate::theme::colors().toolbar_text_disabled
+                        };
+                        paint_status_bar(&clip, bar, frac, fill);
+                    }
+                }
             }
         }
         // The grid line is the item's own last row (top + 16), so icons are not clipped; in
@@ -1511,6 +1541,25 @@ fn dotted(p: &egui::Painter, l: f32, t: f32, r: f32, b: f32, color: Color32) {
     }
 }
 
+/// Where a Status cell's bar goes, from `x0` (after its text) to `x1`, in the row at `top`: 5
+/// pixels tall, centred; none when there is less than 24 pixels of room.
+fn status_bar(x0: f32, x1: f32, top: f32) -> Option<Rect> {
+    const H: f32 = 5.0;
+    (x1 - x0 >= 24.0).then(|| {
+        let y = (top + (row_h() - H) / 2.0).round();
+        Rect::from_min_max(pos2(x0, y), pos2(x1, y + H))
+    })
+}
+
+/// A thin rounded bar: the track in the meter's colour, `frac` of it filled.
+fn paint_status_bar(p: &egui::Painter, bar: Rect, frac: f64, fill: Color32) {
+    let r = bar.height() / 2.0;
+    p.rect_filled(winui::rect(bar), r, crate::theme::colors().meter_track);
+    let w = (bar.width() * frac.clamp(0.0, 1.0) as f32).max(bar.height());
+    let done = Rect::from_min_size(bar.min, egui::vec2(w, bar.height()));
+    p.rect_filled(winui::rect(done), r, fill);
+}
+
 /// A Source chip: a rounded pill, green "Web" or purple "Torrent", white text, at the cell's
 /// left of the cell `x0..x1`. A label too long for the cell (a translation in a narrow column)
 /// is cut with "..."; returns whether it was.
@@ -1543,7 +1592,7 @@ fn chip(
         p,
         font.clone(),
         pill.left() + 6.0,
-        top + 12.0,
+        top + 12.0 + row_slack(),
         label,
         crate::theme::colors().chip_text,
     );
@@ -1825,6 +1874,28 @@ fn modifiers_of_click(
 
 #[cfg(test)]
 mod tests {
+    /// The Status cell's bar fits after the text or not at all, and is centred in the row.
+    #[test]
+    fn the_status_bar_needs_room() {
+        assert!(super::status_bar(100.0, 110.0, 0.0).is_none());
+        let bar = super::status_bar(100.0, 200.0, 40.0).unwrap();
+        assert_eq!(bar.height(), 5.0);
+        assert_eq!(bar.width(), 100.0);
+        let mid = 40.0 + super::row_h() / 2.0;
+        assert!((bar.center().y - mid).abs() <= 1.0);
+    }
+
+    /// A theme's taller rows centre their contents: nothing moves in the classic 17-pixel row,
+    /// Emerald's 19 moves them down 1, Liquid Glass's 24 by 4 (rounded to whole pixels); a
+    /// shorter row never moves them up.
+    #[test]
+    fn taller_rows_centre_their_contents() {
+        assert_eq!(super::row_slack_for(17.0), 0.0);
+        assert_eq!(super::row_slack_for(19.0), 1.0);
+        assert_eq!(super::row_slack_for(24.0), 4.0);
+        assert_eq!(super::row_slack_for(15.0), 0.0);
+    }
+
     use super::*;
 
     /// #1734: a slow frame takes Ctrl going down, the click and Ctrl going up at once: the click

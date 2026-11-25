@@ -591,6 +591,11 @@ pub struct Settings {
     /// entry read back and checked) before it counts as done. On: a broken archive is found
     /// then, not when someone opens it much later.
     pub test_archives: bool,
+    /// Options → Downloads: a torrent downloads into quarantine (a hidden folder in its folder)
+    /// and its files are checked before they go to that folder (quarantine.rs). On.
+    pub quarantine_torrents: bool,
+    /// ... and every other download too (a file from the web). Off.
+    pub quarantine_all: bool,
     /// ... up to this many GB (a test reads the whole file): a larger one is tested only with
     /// right-click → Test archive. 4.
     pub test_archives_gb: u32,
@@ -791,6 +796,8 @@ impl Default for Settings {
             seven_zip_path: String::new(),
             extract_subfolder: 0,
             test_archives: true,
+            quarantine_torrents: true,
+            quarantine_all: false,
             test_archives_gb: 4,
             grabber_check: true,
             grabber_hide_pages: true,

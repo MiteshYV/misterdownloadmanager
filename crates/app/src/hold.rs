@@ -68,6 +68,8 @@ pub enum PopUp {
     Extension,
     /// A link copied to the clipboard (its number): its Download File Info.
     CopiedLink(u64),
+    /// A download held in quarantine for review (its id).
+    Quarantine(u64),
 }
 
 /// How often the system is asked again while something waits (and at most, while nothing does).

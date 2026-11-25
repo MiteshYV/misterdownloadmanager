@@ -4632,6 +4632,7 @@ dependencies = [
  "mdm-ipc",
  "mdm-labserver",
  "mdm-remote",
+ "mdm-scan",
  "mdm-tools",
  "mdm-torrent",
  "muda 0.22.0",
@@ -4919,6 +4920,16 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tracing",
+]
+
+[[package]]
+name = "mdm-scan"
+version = "0.5.2"
+dependencies = [
+ "mdm-extract",
+ "tempfile",
+ "tracing",
+ "zip",
 ]
 
 [[package]]

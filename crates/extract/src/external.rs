@@ -22,7 +22,8 @@ pub fn find_7zip() -> Option<PathBuf> {
 /// Where 7-Zip's program may be, in the order looked at (`var`: an environment variable). On
 /// Windows 7-Zip's own install folders first, then the PATH, then the 7-Zip another archiver
 /// brings with it (#1525): PeaZip's, in its install folder. Elsewhere `7zz`, `7z` or `7za` on
-/// the PATH (Linux and macOS packages name it so). NanaZip, a Store app, has no folder to look
+/// the PATH (Linux and macOS packages name it so), and on macOS Homebrew's and MacPorts' folders,
+/// which a Mac app's PATH lacks. NanaZip, a Store app, has no folder to look
 /// in: its command line is `NanaZipC.exe` on the PATH (an app execution alias, a file to
 /// `is_file`). Any other (a portable copy, a per-user install) is chosen in Options → Archives.
 fn candidates(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Vec<PathBuf> {
@@ -42,6 +43,19 @@ fn candidates(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Vec<PathBuf> 
         for dir in std::env::split_paths(&path) {
             for n in names {
                 candidates.push(dir.join(n));
+            }
+        }
+    }
+    // macOS: an app started from Finder has only /usr/bin:/bin:/usr/sbin:/sbin on its PATH, so
+    // Homebrew's 7-Zip (`brew install sevenzip`: Apple silicon's folder, then Intel's) and
+    // MacPorts' are looked for where they install.
+    if cfg!(target_os = "macos") {
+        for dir in ["/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin"] {
+            for n in names {
+                let p = PathBuf::from(dir).join(n);
+                if !candidates.contains(&p) {
+                    candidates.push(p);
+                }
             }
         }
     }
@@ -171,22 +185,29 @@ mod tests {
         assert!(looked_at(|_| None).is_empty());
     }
 
-    /// Linux and macOS: the names their packages give it, on the PATH.
+    /// Linux and macOS: the names their packages give it, on the PATH; on macOS Homebrew's and
+    /// MacPorts' folders after it, which a Mac app started from Finder doesn't have on its PATH.
     #[cfg(not(windows))]
     #[test]
     fn seven_zip_is_looked_for_on_the_path() {
         let var = |v: &str| (v == "PATH").then(|| OsString::from("/usr/bin:/opt/bin"));
-        assert_eq!(
-            looked_at(var),
-            [
-                "/usr/bin/7zz",
-                "/usr/bin/7z",
-                "/usr/bin/7za",
-                "/opt/bin/7zz",
-                "/opt/bin/7z",
-                "/opt/bin/7za",
-            ]
-        );
-        assert!(looked_at(|_| None).is_empty());
+        let path = [
+            "/usr/bin/7zz",
+            "/usr/bin/7z",
+            "/usr/bin/7za",
+            "/opt/bin/7zz",
+            "/opt/bin/7z",
+            "/opt/bin/7za",
+        ];
+        let got = looked_at(var);
+        assert_eq!(got[..path.len()], path);
+        if cfg!(target_os = "macos") {
+            assert!(got.contains(&"/opt/homebrew/bin/7zz".to_owned()), "{got:?}");
+            assert!(got.contains(&"/usr/local/bin/7z".to_owned()), "{got:?}");
+            assert!(!looked_at(|_| None).is_empty());
+        } else {
+            assert_eq!(got.len(), path.len());
+            assert!(looked_at(|_| None).is_empty());
+        }
     }
 }

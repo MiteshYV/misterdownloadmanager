@@ -43,6 +43,8 @@ craft-i18n.workspace = true
 mdm-cli.workspace = true
 mdm-engine.workspace = true
 mdm-extract.workspace = true
+# Quarantine's checks of a finished download's files (quarantine.rs).
+mdm-scan.workspace = true
 mdm-geo.workspace = true
 mdm-ipc.workspace = true
 # The remote control (#141): a paired phone adds and controls downloads over the local network.

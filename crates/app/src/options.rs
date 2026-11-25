@@ -75,6 +75,9 @@ enum Sub {
     /// Downloads → Customize "Download progress" dialog → Edit... (#1041): (show it when a
     /// download starts).
     Progress(bool),
+    /// Downloads → Virus checking settings → Edit... (quarantine.rs): (torrents in quarantine,
+    /// every download too, whether ClamAV is installed).
+    Virus(bool, bool, bool),
     /// General → Test browser integration...: the checks, read beside the window (#1218) when it
     /// opened, and again once a Set it up finished.
     Test(crate::extension::Tester),
@@ -1491,21 +1494,30 @@ impl OptionsDialog {
         winui::etched_h(&p, o.x + 21.0, o.y + 367.0, 381.0);
         self.user_agent(ui, o);
         winui::etched_h(&p, o.x + 21.0, o.y + 426.0, 381.0);
+        // Quarantine (quarantine.rs): what is checked before it goes to its folder.
         winui::text_right(
             &p,
             o.x + edit_x - 17.0,
             o.y + 451.0,
             crate::i18n::t("Virus checking settings"),
-            LIGHT_DISABLED(),
+            LIGHT_TEXT(),
         );
-        winui::button_light(
+        if winui::button_light(
             ui,
             r(o, edit_x, 436.0, edit_w, 21.0),
             // i18n: verb: edit the item
             "Edit...",
-            ButtonKind::Disabled,
+            ButtonKind::Normal,
             false,
-        );
+        )
+        .clicked()
+        {
+            self.sub = Some(Sub::Virus(
+                self.s.quarantine_torrents,
+                self.s.quarantine_all,
+                mdm_scan::find_clamscan().is_some(),
+            ));
+        }
     }
 
     /// "User-Agent for manually added downloads" (#668): Automatic, the default browser's (the
@@ -4355,6 +4367,26 @@ impl OptionsDialog {
                     Outcome::Closed => {}
                 }
             }
+            Sub::Virus(mut torrents, mut all, clam) => {
+                let out = window(
+                    ctx,
+                    "opt-virus",
+                    // i18n: window title: Options → Downloads → Virus checking settings → Edit...
+                    "Virus checking",
+                    [420.0, 196.0],
+                    false,
+                    LIGHT_BG(),
+                    |ui, o| virus_dialog(ui, o, &mut torrents, &mut all, clam),
+                );
+                match out {
+                    Outcome::Open => self.sub = Some(Sub::Virus(torrents, all, clam)),
+                    Outcome::Done(()) => {
+                        self.s.quarantine_torrents = torrents;
+                        self.s.quarantine_all = all;
+                    }
+                    Outcome::Closed => {}
+                }
+            }
             Sub::Test(tester) => {
                 // Read beside the window (#1218): the last checks while new ones are read (Set it
                 // up finished), "Checking..." before the first.
@@ -5214,6 +5246,63 @@ fn progress_dialog(ui: &mut Ui, o: Pos2, shown: &mut bool) -> Outcome<()> {
         14.0,
     );
     ok_cancel(ui, o, 232.0, 117.0, true)
+}
+
+/// Downloads → Virus checking settings → Edit... (quarantine.rs): torrents, and every download,
+/// checked in quarantine before they go to their folder; ClamAV used when it is installed.
+fn virus_dialog(
+    ui: &mut Ui,
+    o: Pos2,
+    torrents: &mut bool,
+    all: &mut bool,
+    clam: bool,
+) -> Outcome<()> {
+    let p = ui.painter().clone();
+    winui::checkbox_light(
+        ui,
+        o + vec2(14.0, 16.0),
+        torrents,
+        // i18n: checkbox, Options → Downloads → Virus checking: a torrent downloads into a hidden quarantine folder and its files are checked before they go to its folder
+        "Check torrents in quarantine before they go to their folder",
+        true,
+    );
+    let on = *torrents;
+    winui::checkbox_light(
+        ui,
+        o + vec2(34.0, 38.0),
+        all,
+        // i18n: checkbox under "Check torrents in quarantine...": every other download (files from websites) too
+        "Every other download too",
+        on,
+    );
+    winui::paragraph(
+        &p,
+        o.x + 14.0,
+        o.y + 76.0,
+        crate::i18n::t(
+            // i18n: Options → Downloads → Virus checking: what the quarantine check looks for
+            "Nothing in quarantine is opened. MDM holds a download when it finds a program, script, installer or app, a file that isn't what its name says, an archive locked with a password, or an app not signed by an identified developer.",
+        ),
+        LIGHT_TEXT(),
+        o.x + 406.0,
+        14.0,
+    );
+    winui::text(
+        &p,
+        o.x + 14.0,
+        o.y + 148.0,
+        if clam {
+            // i18n: Options → Downloads → Virus checking: ClamAV, a free virus scanner, was found and is used too
+            crate::i18n::t("ClamAV is installed: it scans every download in quarantine too.")
+        } else {
+            // i18n: Options → Downloads → Virus checking: ClamAV, a free virus scanner, isn't installed; where to get it
+            crate::i18n::t(
+                "For a virus scan too, install ClamAV (free: clamav.net, or brew install clamav).",
+            )
+        },
+        winui::MUTED(),
+    );
+    ok_cancel(ui, o, 252.0, 163.0, true)
 }
 
 fn ok_cancel(ui: &mut Ui, o: Pos2, x: f32, y: f32, valid: bool) -> Outcome<()> {

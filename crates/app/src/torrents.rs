@@ -992,14 +992,14 @@ impl Host {
                 Some(t) => t.detach(&spec.hash).await.ok().flatten(),
                 None => None,
             };
-            let mut res = crate::deferred_rename::rename_entry_io(&from, &initial_to);
+            let mut res = crate::deferred_rename::move_entry_io(&from, &initial_to);
             for _ in 1..6 {
                 match &res {
                     Ok(()) => break,
                     Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => break,
                     Err(_) => {
                         tokio::time::sleep(std::time::Duration::from_millis(40)).await;
-                        res = crate::deferred_rename::rename_entry_io(&from, &initial_to);
+                        res = crate::deferred_rename::move_entry_io(&from, &initial_to);
                     }
                 }
             }

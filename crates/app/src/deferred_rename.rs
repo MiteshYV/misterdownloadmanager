@@ -467,6 +467,29 @@ pub fn rename_entry_io(from: &Path, to: &Path) -> std::io::Result<()> {
     ))
 }
 
+/// Move `from` up into a folder it is already under (out of quarantine: `<dir>/.mdm-quarantine/
+/// <key>/<name>` to `<dir>/<name>`), on the same disk, never replacing an existing entry. A
+/// target in `from`'s own folder is a rename ([`rename_entry_io`]); any other place than a
+/// folder `from` is under is refused.
+pub fn move_entry_io(from: &Path, to: &Path) -> std::io::Result<()> {
+    let Some(to_parent) = to.parent().filter(|p| !p.as_os_str().is_empty()) else {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "missing parent folder",
+        ));
+    };
+    if from.parent() == Some(to_parent) {
+        return rename_entry_io(from, to);
+    }
+    if !from.starts_with(to_parent) || !is_safe_sibling_target(to_parent, to) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "target must be a single name in a folder the file is under",
+        ));
+    }
+    os_rename_no_replace(from, to)
+}
+
 /// Rename `from` to `to` without ever replacing an existing entry.
 #[cfg(test)]
 pub fn rename_entry(from: &Path, to: &Path) -> Result<(), String> {
@@ -481,7 +504,7 @@ pub fn rename_reserved_or_number(
     hold: Option<mdm_engine::naming::Reservation>,
     is_dir: bool,
 ) -> std::io::Result<PathBuf> {
-    match rename_entry_io(from, &initial_to) {
+    match move_entry_io(from, &initial_to) {
         Ok(()) => {
             drop(hold);
             return Ok(initial_to);
@@ -494,12 +517,15 @@ pub fn rename_reserved_or_number(
             drop(hold);
         }
     }
-    let Some(parent) = from.parent() else {
+    // Numbered in the folder it goes to (its own for a rename, the one above for a move out of
+    // quarantine).
+    let Some(parent) = initial_to.parent().map(Path::to_path_buf) else {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
             "missing parent folder",
         ));
     };
+    let parent = parent.as_path();
     let initial_name = initial_to
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
@@ -519,7 +545,7 @@ pub fn rename_reserved_or_number(
         let Some(_res) = mdm_engine::naming::reserve(&path) else {
             continue;
         };
-        match rename_entry_io(from, &path) {
+        match move_entry_io(from, &path) {
             Ok(()) => return Ok(path),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(e) => return Err(e),
@@ -841,5 +867,34 @@ mod tests {
             std::fs::read(moved_dir.join("inside.txt")).unwrap(),
             b"mine"
         );
+    }
+}
+
+#[cfg(test)]
+mod move_tests {
+    use super::{move_entry_io, rename_reserved_or_number};
+
+    /// Out of quarantine: up into a folder the file is under, never over an existing file
+    /// (numbered then); nowhere else.
+    #[test]
+    fn a_file_moves_up_out_of_quarantine_and_nowhere_else() {
+        let dir = tempfile::tempdir().unwrap();
+        let q = dir.path().join(".mdm-quarantine").join("d-1");
+        std::fs::create_dir_all(&q).unwrap();
+        let from = q.join("clip.mp4");
+        std::fs::write(&from, b"x").unwrap();
+        // Sideways or down: refused.
+        let elsewhere = dir.path().join("other");
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        assert!(move_entry_io(&from, &elsewhere.join("clip.mp4")).is_err());
+        assert!(from.exists());
+        // Up, over a file already there: numbered, the old one kept.
+        std::fs::write(dir.path().join("clip.mp4"), b"old").unwrap();
+        let to =
+            rename_reserved_or_number(&from, dir.path().join("clip.mp4"), None, false).unwrap();
+        assert_eq!(to, dir.path().join("clip (1).mp4"));
+        assert_eq!(std::fs::read(dir.path().join("clip.mp4")).unwrap(), b"old");
+        assert_eq!(std::fs::read(&to).unwrap(), b"x");
+        assert!(!from.exists());
     }
 }

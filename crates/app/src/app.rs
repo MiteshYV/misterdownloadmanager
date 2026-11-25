@@ -1534,6 +1534,13 @@ pub struct App {
     tests: crate::archtest::Tests,
     /// The tests MDM's closing stopped were queued again (at the first frame).
     tests_resumed: bool,
+    /// Quarantine (quarantine.rs): checks under way, the findings waiting for the person.
+    quarantine: crate::quarantine::Quarantine,
+    /// Whether the checks MDM's last closing cut short were started again.
+    quarantine_resumed: bool,
+    /// Downloads out of quarantine at their place since the last tick: their finishing goes on
+    /// (sound, Download complete, extraction).
+    released: Vec<u64>,
     /// A damaged ZIP's file being made a part file again beside the window, its damaged parts to
     /// download (`mdm_engine::repair::reopen`): the download and the answer.
     refetching: Vec<(u64, std::sync::mpsc::Receiver<std::io::Result<u64>>)>,
@@ -2378,6 +2385,9 @@ impl App {
             extracts: Default::default(),
             tests: Default::default(),
             tests_resumed: false,
+            quarantine: Default::default(),
+            quarantine_resumed: false,
+            released: Vec::new(),
             refetching: Vec::new(),
             deleter: {
                 // A file that couldn't go is said in the notice: drawn when it is told.
@@ -4513,6 +4523,8 @@ impl App {
         if item.move_from.is_some() {
             return;
         }
+        // Options → Downloads → every download in quarantine: a web download's file goes there.
+        self.quarantine_web(id);
         // The download limit is reached: it starts when the window has room again (a video or a
         // gallery too, #708: their bytes count toward it).
         if self.settings.limits_on && self.quota.blocked {
@@ -6381,9 +6393,22 @@ impl App {
     ) {
         match r {
             Ok(actual_to) => {
+                let mut released = None;
                 if let Some(item) = self.item(id) {
                     item.rename_on_complete = None;
                     take_place(item, actual_to.clone());
+                    released = item.quarantine.take();
+                    if released.is_some() {
+                        // i18n: in a download's log: its files went from quarantine to its folder
+                        item.note(crate::i18n::t("Moved out of quarantine"));
+                    }
+                }
+                if let Some(hold) = released {
+                    crate::quarantine::tidy(&hold);
+                    // Its finishing now, at its place (`poll_quarantine`); not extracted here.
+                    self.released.push(id);
+                    self.dirty = true;
+                    return;
                 }
                 for c in &mut self.complete {
                     if c.id == id {
@@ -6400,6 +6425,10 @@ impl App {
                 if let Some(item) = self.item(id) {
                     item.rename_on_complete = None;
                     item.note(msg.clone());
+                    // Out of quarantine it couldn't go: it stays held, to release again.
+                    if let Some(hold) = item.quarantine.as_mut() {
+                        hold.state = crate::quarantine::State::Held;
+                    }
                 }
                 if notify_ui {
                     self.notice = Some((crate::i18n::mark("Move/Rename"), msg));
@@ -7314,9 +7343,23 @@ impl App {
     /// download added, if one was (not when the debrid account takes it).
     fn add_torrent(&mut self, add: crate::torrentdlg::TorrentAdd) -> Option<u64> {
         let meta = &add.meta;
-        let folder = meta.folder_in_with_subfolder(&add.dir, add.create_subfolder);
+        // Quarantine (quarantine.rs): its files go to a hidden folder in `add.dir` and come to
+        // `add.dir` once checked; not a multi-file torrent without its own folder, nor one going
+        // to a debrid service, nor one whose files are already there (added for them).
+        let real_files = meta.files.iter().filter(|f| !f.padding).count();
+        let quarantine = (self.settings.quarantine_torrents
+            && crate::quarantine::torrent_can_hold(real_files, add.create_subfolder)
+            && self.torrent_account().is_none()
+            && add.existing.is_empty())
+        .then(|| {
+            crate::quarantine::Hold::new(&add.dir, &crate::quarantine::torrent_key(&meta.info_hash))
+        });
+        let dir = quarantine
+            .as_ref()
+            .map_or(add.dir.clone(), |h| h.dir.clone());
+        let folder = meta.folder_in_with_subfolder(&dir, add.create_subfolder);
         let dest =
-            crate::torrents::dest_for(meta, &add.dir, add.files.as_deref(), add.create_subfolder);
+            crate::torrents::dest_for(meta, &dir, add.files.as_deref(), add.create_subfolder);
         let ownership = crate::torrent_ownership::Ownership::new(meta);
         if self.torrent_host.busy(&meta.info_hash) {
             self.notice = Some((
@@ -7473,6 +7516,11 @@ impl App {
             // The shared folder is where files go, not the torrent's display name.
             if !add.create_subfolder && meta.files.iter().filter(|f| !f.padding).count() > 1 {
                 item.file_name = meta.name.clone();
+            }
+            if let Some(hold) = &quarantine {
+                // i18n: in a torrent's log: it downloads into quarantine, where its files are checked before they go to its folder
+                item.note(crate::i18n::t("Downloading into quarantine: its files are checked before they go to its folder"));
+                item.quarantine = Some(hold.clone());
             }
             item.torrent = Some(crate::torrents::TorrentSpec {
                 ownership: Some(ownership),
@@ -9029,6 +9077,12 @@ impl App {
         let Some(i) = self.items.iter().find(|i| i.id == id) else {
             return;
         };
+        // Held in quarantine: never opened, its findings shown again instead.
+        if i.status == Status::Complete && i.quarantine.is_some() {
+            let ctx = self.ui_ctx.clone();
+            self.quarantine.reopen(id, &mut self.items, &ctx);
+            return;
+        }
         if i.status == Status::Complete {
             crate::dialogs::open_download(&i.dest, i.moved_away);
         } else if !self.progress.iter().any(|p| p.id == id) {
@@ -9608,6 +9662,9 @@ impl App {
         // An archive is tested before its download counts as done (#1661): its finishing (its
         // sound, Download complete, its extraction) waits for the test's outcome.
         self.poll_tests(&mut finished, ctx);
+        // Quarantine: a finished download held there is checked first, and finishes once it is
+        // at its place (a clean one at once, one with a concern when the person releases it).
+        self.poll_quarantine(&mut finished, ctx);
         // A video or gallery whose helper seems out of date: a newer one first (#1544).
         failed.retain(|id| !self.heal_if_outdated(*id, ctx));
         failed.extend(self.healed(ctx));
@@ -9734,6 +9791,142 @@ impl App {
     /// Archive tests (#1661): `finished`'s downloads whose archive is to be tested wait for it
     /// (taken out); those whose test is over are put in. A damaged ZIP whose damage is placed has
     /// its file made a part file again beside the window, then those parts downloaded again.
+    /// Quarantine's part of a tick: finished downloads held there are checked (out of
+    /// `finished` until they are at their place), clean ones released, and the ones released
+    /// since the last tick finished.
+    fn poll_quarantine(&mut self, finished: &mut Vec<u64>, ctx: &egui::Context) {
+        if !self.quarantine_resumed {
+            self.quarantine_resumed = true;
+            self.quarantine.resume(&mut self.items, ctx);
+        }
+        let (q, items) = (&mut self.quarantine, &mut self.items);
+        let before = finished.len();
+        finished.retain(|id| !q.hold(*id, items, ctx));
+        if finished.len() != before {
+            self.dirty = true;
+        }
+        for done in self.quarantine.poll(&mut self.items) {
+            self.dirty = true;
+            match done {
+                crate::quarantine::Done::Clean(id) => self.release_quarantine(id),
+                // A torrent held shares nothing until it is released.
+                crate::quarantine::Done::Flagged(id) => {
+                    if self.items.iter().any(|i| i.id == id && i.live.is_some()) {
+                        self.stop(id);
+                    }
+                }
+            }
+        }
+        finished.append(&mut self.released);
+    }
+
+    /// Download `id` out of quarantine to its folder: a torrent through its host (attached
+    /// again there to keep sharing, as a finished torrent's move is), a file renamed beside the
+    /// window. `apply_finished_rename` takes the answer.
+    fn release_quarantine(&mut self, id: u64) {
+        let Some(item) = self.items.iter().find(|i| i.id == id) else {
+            return;
+        };
+        let Some(hold) = item.quarantine.clone() else {
+            return;
+        };
+        let from = item.dest.clone();
+        let Some(to) = hold.release_path(&from) else {
+            return;
+        };
+        let is_dir = from.is_dir();
+        if let Some(item) = self.item(id)
+            && let Some(h) = item.quarantine.as_mut()
+        {
+            h.state = crate::quarantine::State::Releasing;
+        }
+        self.dirty = true;
+        let hold_place = mdm_engine::naming::reserve(&to);
+        let (tx, rx) = std::sync::mpsc::channel();
+        let spec = self
+            .items
+            .iter()
+            .find(|i| i.id == id)
+            .and_then(|i| i.torrent.clone());
+        match spec {
+            Some(spec) => {
+                let known = self.session_hashes();
+                if self
+                    .torrent_host
+                    .rename_finished(
+                        &self.rt,
+                        known,
+                        &spec,
+                        from,
+                        to,
+                        hold_place,
+                        is_dir,
+                        self.settings.torrent_keep_sharing,
+                        tx,
+                    )
+                    .is_err()
+                {
+                    // Its host is busy with it: tried again at the next check of it.
+                    if let Some(item) = self.item(id)
+                        && let Some(h) = item.quarantine.as_mut()
+                    {
+                        h.state = crate::quarantine::State::Checking;
+                    }
+                    return;
+                }
+            }
+            None => {
+                crate::launch::spawn("quarantine release", move || {
+                    let moved = match crate::deferred_rename::move_entry_io(&from, &to) {
+                        Ok(()) => {
+                            drop(hold_place);
+                            Ok(to)
+                        }
+                        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                            crate::deferred_rename::rename_reserved_or_number(
+                                &from, to, hold_place, is_dir,
+                            )
+                            .map_err(|e| e.to_string())
+                        }
+                        Err(e) => {
+                            drop(hold_place);
+                            Err(e.to_string())
+                        }
+                    };
+                    let _ = tx.send((moved, None));
+                });
+            }
+        }
+        self.renaming.push((id, rx));
+    }
+
+    /// A web download about to start, quarantined when Options says every download is: its file
+    /// goes to its quarantine (`<its folder>/.mdm-quarantine/d-<id>`) instead, its folder kept
+    /// for its release.
+    fn quarantine_web(&mut self, id: u64) {
+        if !self.settings.quarantine_all {
+            return;
+        }
+        let Some(item) = self.item(id) else { return };
+        if !crate::quarantine::web_can_hold(item) {
+            return;
+        }
+        let (Some(dir), Some(name)) = (item.dest.parent(), item.dest.file_name()) else {
+            return;
+        };
+        let hold = crate::quarantine::Hold::new(dir, &crate::quarantine::download_key(id));
+        // One that already has its part file where it is goes on there.
+        if mdm_engine::naming::part_path(&item.dest).exists() {
+            return;
+        }
+        if std::fs::create_dir_all(&hold.dir).is_err() {
+            return;
+        }
+        item.dest = hold.dir.join(name);
+        item.quarantine = Some(hold);
+        self.dirty = true;
+    }
+
     fn poll_tests(&mut self, finished: &mut Vec<u64>, ctx: &egui::Context) {
         if !self.tests_resumed {
             self.tests_resumed = true;
@@ -13737,6 +13930,29 @@ impl App {
                     for id in ids {
                         self.redownload(id);
                     }
+                }
+            }
+        }
+        // Quarantine's findings (one download at a time): release it, keep it, or delete it.
+        if let Some(id) = self.quarantine.review.as_ref().map(|r| r.id)
+            && self.hold.lets(crate::hold::PopUp::Quarantine(id), now)
+            && let Some(r) = &mut self.quarantine.review
+        {
+            use crate::quarantine::Choice;
+            match r.show(ctx) {
+                Outcome::Open => {}
+                Outcome::Closed | Outcome::Done(Choice::Keep) => self.quarantine.review = None,
+                Outcome::Done(Choice::Release) => {
+                    self.quarantine.review = None;
+                    if let Some(item) = self.item(id) {
+                        // i18n: in a download's log: the user let it out of quarantine although the check found something
+                        item.note(crate::i18n::t("Released from quarantine by hand"));
+                    }
+                    self.release_quarantine(id);
+                }
+                Outcome::Done(Choice::Delete) => {
+                    self.quarantine.review = None;
+                    self.ask_delete(vec![id], true);
                 }
             }
         }

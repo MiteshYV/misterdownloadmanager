@@ -53,6 +53,7 @@ mod playlistdlg;
 mod preview;
 mod progress;
 mod properties;
+mod quarantine;
 mod queue;
 mod quota;
 mod recent;

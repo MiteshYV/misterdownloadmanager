@@ -621,6 +621,10 @@ pub struct Item {
     /// a test MDM's closing stopped runs again at the next start.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub testing: bool,
+    /// Held in quarantine (quarantine.rs): where it goes once its files are checked, and how far
+    /// that is. None: not held (never was, or released).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quarantine: Option<crate::quarantine::Hold>,
     /// While its test runs: how far it is, in thousandths (its thread counts). Memory only.
     #[serde(skip)]
     pub(crate) test_progress: Option<std::sync::Arc<std::sync::atomic::AtomicU32>>,
@@ -1417,6 +1421,7 @@ impl Item {
             state_here: None,
             live_copy: false,
             testing: false,
+            quarantine: None,
             test_progress: None,
             damaged: false,
             refetched: false,
@@ -2062,6 +2067,11 @@ impl Item {
         }
         if let Some(damaged) = self.damaged_text(true) {
             return damaged;
+        }
+        if self.status == Status::Complete
+            && let Some(held) = self.quarantine.as_ref().and_then(|q| q.status_text())
+        {
+            return held;
         }
         match self.status {
             // i18n: a download's status (state it is in, not a command): finished

@@ -40,6 +40,10 @@
 #. {n} = a number (keep the braces as they are)
 #. the trailing ... means it is still going on: keep it
 @plural	Found {n} peer, connecting...|Found {n} peers, connecting...	Found {n} peer, connecting...|Found {n} peers, connecting...
+#. count in quarantine.rs
+#. in a download's log: the quarantine check found something in {n} of its files
+#. {n} = a number (keep the braces as they are)
+@plural	Held in quarantine: {n} file needs your attention|Held in quarantine: {n} files need your attention	Held in quarantine: {n} file needs your attention|Held in quarantine: {n} files need your attention
 #. count in rssdlg.rs
 #. RSS feeds window, Download rules: how many articles the feeds hold now that the rule matches (it adds only new ones)
 #. {n} = a number (keep the braces as they are)
@@ -56,10 +60,18 @@
 #. under "Also delete the files from disk", while it is ticked: how many of the downloads being deleted are finished, whose complete files are deleted from the disk too
 #. {n} = a number (keep the braces as they are)
 @plural	This also deletes {n} finished file.|This also deletes {n} finished files.	This also deletes {n} finished file.|This also deletes {n} finished files.
+#. count in quarantine.rs
+#. quarantine window: ClamAV found something in {n} files
+#. {n} = a number (keep the braces as they are)
+@plural	Virus scan: ClamAV found something in {n} file|Virus scan: ClamAV found something in {n} files	Virus scan: ClamAV found something in {n} file|Virus scan: ClamAV found something in {n} files
 #. count in a dialog box
 #. under the first failed downloads in the summary of a group of downloads: {n} more failed (Show in list shows them all)
 #. {n} = a number (keep the braces as they are)
 @plural	and {n} more|and {n} more	and {n} more|and {n} more
+#. count in quarantine.rs
+#. in the quarantine window: how many more files (all with nothing found) aren't listed
+#. {n} = a number (keep the braces as they are)
+@plural	and {n} more file with nothing found|and {n} more files with nothing found	and {n} more file with nothing found|and {n} more files with nothing found
 #. count in a dialog box
 #. "files already there" question, under the first path: {n} = how many more
 #. {n} = a number (keep the braces as they are)
@@ -264,6 +276,8 @@
 #. text in the Options window
 #. Options → Sites Logins → Cookies for video sites: the tooltip of the profile box
 	A profile's name or its folder. Empty: the profile used last. For a browser built on Chromium that isn't listed (Helium, Thorium...), choose Chromium and its profile's folder.	A profile's name or its folder. Empty: the profile used last. For a browser built on Chromium that isn't listed (Helium, Thorium...), choose Chromium and its profile's folder.
+#. text in quarantine.rs
+	A program named to look like another file	A program named to look like another file
 #. text in whereis.rs
 #. the tooltip of where a download's server is, when a proxy carries the download
 	A proxy carries this download: the place and the time are the proxy's, not the server's.	A proxy carries this download: the place and the time are the proxy's, not the server's.
@@ -804,8 +818,14 @@
 #. what to do when the proxy set in Options didn't let a helper's download connect; {proxy} = the Options tab Proxy / Socks; {name} = yt-dlp, ffmpeg or gallery-dl; {helpers} and {other} = the buttons Helpers and Use another program
 #. {name} = a file name (keep the braces as they are)
 	Check the proxy in Options → {proxy}, or download {name} yourself and choose it in {helpers} → {other}.	Check the proxy in Options → {proxy}, or download {name} yourself and choose it in {helpers} → {other}.
+#. text in the Options window
+#. checkbox, Options → Downloads → Virus checking: a torrent downloads into a hidden quarantine folder and its files are checked before they go to its folder
+	Check torrents in quarantine before they go to their folder	Check torrents in quarantine before they go to their folder
 #. text in helpers.rs
 	Check your connection, then try again, or get them later from the video window.	Check your connection, then try again, or get them later from the video window.
+#. text in quarantine.rs
+#. in a download's log: its files were checked in quarantine and nothing was found
+	Checked in quarantine: nothing found	Checked in quarantine: nothing found
 #. text in the Options window
 #. tooltip of "Show downloads when the notification area icon is clicked": what the click on MDM's tray icon does when it is ticked and when not
 	Checked, a click on MDM's icon shows what is downloading, with Pause and Cancel, and a double click opens the window; unchecked, a click shows or hides the window	Checked, a click on MDM's icon shows what is downloading, with Pause and Cancel, and a double click opens the window; unchecked, a click shows or hides the window
@@ -821,10 +841,18 @@
 #. message or event log entry in the main window
 #. event log entry: a torrent's files are being read and checked again (Recheck)
 	Checking every piece again	Checking every piece again
+#. text in quarantine.rs
+#. a download's status: its files are checked in quarantine before they go to its folder
+#. the trailing ... means it is still going on: keep it
+	Checking files...	Checking files...
 #. text in the Help menu's windows (About, updates, shortcuts, Tell a friend); text in helpers.rs
 #. Helpers: MDM is asking whether a newer version of a helper exists
 #. the trailing ... means it is still going on: keep it
 	Checking for updates...	Checking for updates...
+#. text in quarantine.rs
+#. in a download's log: its files are checked in quarantine before they go to its folder
+#. the trailing ... means it is still going on: keep it
+	Checking its files in quarantine...	Checking its files in quarantine...
 #. text in gallerydlg.rs
 #. in Download a gallery, while gallery-dl checks the address (offline)
 #. the trailing ... means it is still going on: keep it
@@ -884,6 +912,13 @@
 #. text in countries.rs
 #. a country's name (where a download's server is)
 	Christmas Island	Christmas Island
+#. text in quarantine.rs
+#. quarantine: ClamAV, a virus scanner, found something; {name} is its name for it
+#. {name} = a file name (keep the braces as they are)
+	ClamAV found {name}	ClamAV found {name}
+#. text in the Options window
+#. Options → Downloads → Virus checking: ClamAV, a free virus scanner, was found and is used too
+	ClamAV is installed: it scans every download in quarantine too.	ClamAV is installed: it scans every download in quarantine too.
 #. button in the download list; button in the Options window
 #. verb: clears this filter
 	Clear	Clear
@@ -1096,7 +1131,7 @@
 	Default download settings	Default download settings
 #. text in the Options window
 	Default max. conn. number	Default max. conn. number
-#. text in the main window's messages (deleting downloads' files); button in a dialog box; button in the Options window; button in rssdlg.rs; text in torrent downloads
+#. text in the main window's messages (deleting downloads' files); button in a dialog box; button in the Options window; text in quarantine.rs; button in rssdlg.rs; text in torrent downloads
 #. button: deletes the category
 #. verb: delete the item
 	Delete	Delete
@@ -1286,6 +1321,9 @@
 #. text in the Download video window
 #. the trailing ... means it is still going on: keep it
 	Downloading and verifying yt-dlp...	Downloading and verifying yt-dlp...
+#. message or event log entry in the main window
+#. in a torrent's log: it downloads into quarantine, where its files are checked before they go to its folder
+	Downloading into quarantine: its files are checked before they go to its folder	Downloading into quarantine: its files are checked before they go to its folder
 #. text in helpers.rs
 #. Video helpers: MDM's own yt-dlp is being downloaded
 #. the trailing ... means it is still going on: keep it
@@ -1442,6 +1480,9 @@
 #. text in the Options window
 #. Options → Remote → Listen on: the default: each of the computer's private local network addresses (never one the internet reaches)
 	Every local network address	Every local network address
+#. checkbox in the Options window
+#. checkbox under "Check torrents in quarantine...": every other download (files from websites) too
+	Every other download too	Every other download too
 #. what a keyboard shortcut does in the Help menu's windows (About, updates, shortcuts, Tell a friend)
 	Everything at its normal size (100%)	Everything at its normal size (100%)
 #. text in the Download video window
@@ -1644,6 +1685,9 @@
 #. text in finish.rs
 #. Snooze menu of the Download complete window: show no Download complete window for this long
 	For 8 hours	For 8 hours
+#. text in the Options window
+#. Options → Downloads → Virus checking: ClamAV, a free virus scanner, isn't installed; where to get it
+	For a virus scan too, install ClamAV (free: clamav.net, or brew install clamav).	For a virus scan too, install ClamAV (free: clamav.net, or brew install clamav).
 #. text in the Batch download window
 #. {address} = an example web address with a * in the file name
 	For example:  {address}	For example:  {address}
@@ -1833,6 +1877,10 @@
 #. text in countries.rs
 #. a country's name (where a download's server is)
 	Heard Island and McDonald Islands	Heard Island and McDonald Islands
+#. text in quarantine.rs; window title in quarantine.rs
+#. a download's status: a check found something, so its files stay in quarantine until the user decides
+#. window title: a download held in quarantine because its check found something
+	Held in quarantine	Held in quarantine
 #. button in the Options window
 #. noun: button that opens the help
 	Help	Help
@@ -1866,6 +1914,10 @@
 	Hide web pages	Hide web pages
 #. text in the Options window
 	Hold Alt while clicking a link to let the browser download it instead of Mister Download Manager.	Hold Alt while clicking a link to let the browser download it instead of Mister Download Manager.
+#. text in quarantine.rs
+#. quarantine: an archive with a program inside; {name} is the program's name
+#. {name} = a file name (keep the braces as they are)
+	Holds a program: {name}	Holds a program: {name}
 #. link (opens a web page) in the Help menu's windows (About, updates, shortcuts, Tell a friend)
 	Home page	Home page
 #. text in countries.rs
@@ -2088,6 +2140,9 @@
 	Kazakhstan	Kazakhstan
 #. text in a dialog box; text in a download's progress window; text in the Add torrent window
 	KBytes/sec	KBytes/sec
+#. text in quarantine.rs
+#. quarantine window button: leave it in quarantine and close the window
+	Keep in quarantine	Keep in quarantine
 #. text in helpers.rs
 #. Helpers: checkbox: MDM checks for and installs newer versions of its own yt-dlp, ffmpeg, gallery-dl and Node.js by itself
 	Keep MDM's helpers up to date automatically	Keep MDM's helpers up to date automatically
@@ -2231,6 +2286,8 @@
 #. text in the Add torrent window
 #. where a magnet's peers came from: computers on your own network; {peers} = "3 peers"
 	Local network: {peers}	Local network: {peers}
+#. text in quarantine.rs
+	Locked with a password: its contents can't be checked	Locked with a password: its contents can't be checked
 #. text in the Batch download window; text in a dialog box; text in a download's Properties window
 #. noun: the user name for the server (an input box follows)
 #. noun: the user name and password section
@@ -2538,6 +2595,9 @@
 #. the preview pane: a finished download's file is no longer where it was saved
 	Moved or deleted	Moved or deleted
 #. message or event log entry in the main window
+#. in a download's log: its files went from quarantine to its folder
+	Moved out of quarantine	Moved out of quarantine
+#. message or event log entry in the main window
 #. event log: an unfinished download's part file was moved to another folder; it resumes there; {folder} is that folder
 	Moved to {folder}	Moved to {folder}
 #. message or event log entry in the main window
@@ -2546,8 +2606,9 @@
 #. message or event log entry in the main window
 #. event log: an unfinished download's part file is being moved to another folder; {folder} is that folder
 	Moving to {folder}	Moving to {folder}
-#. text in the download list (sizes, speeds, status)
+#. text in the download list (sizes, speeds, status); text in quarantine.rs
 #. a download's status: its unfinished file is being moved to another folder
+#. a download's status: its checked files are going from quarantine to its folder
 #. the trailing ... means it is still going on: keep it
 	Moving...	Moving...
 #. text in countries.rs
@@ -2791,6 +2852,9 @@
 	Not now? Get them later from Tasks → Download video from a page.	Not now? Get them later from Tasks → Download video from a page.
 #. text in a download's Properties window
 	not one server (peers, or a helper's)	not one server (peers, or a helper's)
+#. text in quarantine.rs
+#. quarantine (macOS): an app or installer not signed by an identified developer; {why} is what macOS said
+	Not signed by an identified developer ({why})	Not signed by an identified developer ({why})
 #. text in debrid.rs
 #. Options → Accounts: the service doesn't take this file host (shouldn't happen when signing in)
 	not supported by this service	not supported by this service
@@ -2803,11 +2867,23 @@
 	Not tested: it is larger than {limit} (Options → Archives). Right-click → Test archive tests it	Not tested: it is larger than {limit} (Options → Archives). Right-click → Test archive tests it
 #. text in the Options window
 	Not used: file parts are written next to the file	Not used: file parts are written next to the file
+#. text in quarantine.rs
+#. quarantine: a file whose name says video/picture/document but whose content is something else; {kind} names what it really is (a program, an archive)
+	Not what its name says: it is {kind}	Not what its name says: it is {kind}
 #. text in a dialog box
 #. \\n starts a new line: break lines where they fit the translation
 	Note: Internet servers may break connection when the speed is too limited! Thus it's not\nrecommended to use Speed Limiter to download from servers that do not support\n"resume" feature.	Note: Internet servers may break connection when the speed is too limited! Thus it's not\nrecommended to use Speed Limiter to download from servers that do not support\n"resume" feature.
 #. text in the Options window
 	Note: These settings don't relate to queue processing	Note: These settings don't relate to queue processing
+#. text in quarantine.rs
+#. in the quarantine window: a file whose check found nothing
+	Nothing found	Nothing found
+#. text in quarantine.rs
+#. in the quarantine window, under its title
+	Nothing in it has been opened. It stays in quarantine until you decide.	Nothing in it has been opened. It stays in quarantine until you decide.
+#. text in the Options window
+#. Options → Downloads → Virus checking: what the quarantine check looks for
+	Nothing in quarantine is opened. MDM holds a download when it finds a program, script, installer or app, a file that isn't what its name says, an archive locked with a password, or an app not signed by an identified developer.	Nothing in quarantine is opened. MDM holds a download when it finds a program, script, installer or app, a file that isn't what its name says, an archive locked with a password, or an app not signed by an identified developer.
 #. message or event log entry in the main window
 	Nothing to download in {item}: drop links, a .torrent file, or a list of addresses (.txt, .ef2).	Nothing to download in {item}: drop links, a .torrent file, or a list of addresses (.txt, .ef2).
 #. text in the Scheduler window
@@ -3228,6 +3304,12 @@
 #. text in rssdlg.rs
 #. RSS feeds window, Download rules: the two boxes above hold regular expressions
 	Regular expressions	Regular expressions
+#. text in quarantine.rs
+#. quarantine window button: move the download to its folder although something was found
+	Release anyway	Release anyway
+#. message or event log entry in the main window
+#. in a download's log: the user let it out of quarantine although the check found something
+	Released from quarantine by hand	Released from quarantine by hand
 #. text in extracting archives (a download's log, the Archive password window)
 #. in Archive password: check box: keep the password typed in Options → Archives → Archive passwords, to try it on the next encrypted archives
 	Remember it for other archives	Remember it for other archives
@@ -4846,8 +4928,19 @@
 #. text in countries.rs
 #. a country's name (where a download's server is)
 	Virgin Islands (U.S.)	Virgin Islands (U.S.)
+#. window title in the Options window
+#. window title: Options → Downloads → Virus checking settings → Edit...
+	Virus checking	Virus checking
 #. text in the Options window
 	Virus checking settings	Virus checking settings
+#. text in quarantine.rs
+#. quarantine window: ClamAV couldn't check; {why} is what it said
+	Virus scan: ClamAV couldn't check ({why})	Virus scan: ClamAV couldn't check ({why})
+#. text in quarantine.rs
+#. quarantine window: ClamAV checked every file
+	Virus scan: ClamAV found nothing	Virus scan: ClamAV found nothing
+#. text in quarantine.rs
+	Virus scan: ClamAV isn't installed (it is free: clamav.net)	Virus scan: ClamAV isn't installed (it is free: clamav.net)
 #. text in archtest.rs
 #. why a split archive (in several files, its volumes) isn't tested yet, in "{name} isn't complete ({why})"; {n} is the number of the volume not downloaded yet
 #. {n} = a number (keep the braces as they are)
@@ -5224,6 +5317,10 @@
 #. in the "Damaged archive" window: {name} is the archive's first volume's file name
 #. {name} = a file name (keep the braces as they are)
 	{name} is damaged: its test found errors in one of its volumes.	{name} is damaged: its test found errors in one of its volumes.
+#. text in quarantine.rs
+#. in the quarantine window: {name} is the download, {n} how many of its files the check flagged
+#. {name} = a file name; {n} = a number (keep the braces as they are)
+	{name} is held for review: {n} file needs your attention.	{name} is held for review: {n} file needs your attention.
 #. text in extracting archives (a download's log, the Archive password window)
 #. in Archive password: {name} is the archive's file name
 #. {name} = a file name (keep the braces as they are)

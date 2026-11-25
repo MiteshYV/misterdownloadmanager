@@ -14,6 +14,18 @@ use crate::winui::{self, text_font, text_width_font};
 /// Height of our menu bar band incl. its #f0f0f0 bottom line (IDM: non-client y −20…−1).
 pub const MENU_H: f32 = 20.0;
 
+/// The in-window menu bar's height: [`MENU_H`], or 0 where the menus are the system's (macOS,
+/// macmenu.rs; not in an off-screen test run, whose pictures show the bar).
+pub fn menu_h() -> f32 {
+    if native_menubar() { 0.0 } else { MENU_H }
+}
+
+/// The menus are the system's menu bar at the top of the screen (macOS), not a bar in the
+/// window.
+pub fn native_menubar() -> bool {
+    cfg!(target_os = "macos") && !crate::offscreen()
+}
+
 const fn rgb(r: u8, g: u8, b: u8) -> Color32 {
     Color32::from_rgb(r, g, b)
 }
@@ -423,7 +435,7 @@ pub fn menu_letter(label: &str) -> String {
         .unwrap_or_default()
 }
 
-fn plain(label: &str) -> (String, Option<usize>) {
+pub(crate) fn plain(label: &str) -> (String, Option<usize>) {
     let mut out = String::new();
     let mut mnemonic = None;
     let mut chars = label.chars().peekable();
@@ -449,8 +461,9 @@ pub fn access_key(label: &str) -> Option<String> {
         .map(|c| c.to_lowercase().to_string())
 }
 
-/// The menu bar's titles, in English (their translations: context "menubar").
-#[cfg(test)]
+/// The menu bar's titles, in English (their translations: context "menubar"): the in-window
+/// bar's, and macOS's menu bar's (macmenu.rs).
+#[cfg_attr(not(any(target_os = "macos", test)), allow(dead_code))]
 pub fn bar_titles() -> Vec<&'static str> {
     MENUS.iter().map(|m| m.0).collect()
 }
@@ -481,7 +494,7 @@ pub fn key_label(spec: &'static str) -> String {
 
 /// A menu label without the shortcut IDM writes into some labels ("Find (Ctrl-F)"), when the
 /// menu shows the shortcut in its own column.
-fn without_shortcut(text: &str) -> &str {
+pub(crate) fn without_shortcut(text: &str) -> &str {
     let t = text.trim_end();
     if let Some(open) = t.rfind(" (")
         && t.ends_with(')')
@@ -2037,7 +2050,7 @@ pub fn toolbar(
         .chain(toggle.map(|(i, l, on)| (i, l, true, Some(on))))
         .collect();
     let p = ui.painter().clone();
-    let top = o.y + MENU_H;
+    let top = o.y + menu_h();
     let c = crate::theme::colors();
     // Glass (Liquid Glass): no etched band, capsules under the pointer, the labels
     // in the interface's font under smaller icons.
@@ -2162,7 +2175,10 @@ pub fn toolbar(
                 n.set_expanded(false);
             });
             if ui.input(|inp| inp.has_accesskit_action_request(resp.id, Action::Expand)) {
-                event = Some(ToolbarEvent::Drop(i, pos2(winui::mx(x), o.y + 85.0)));
+                event = Some(ToolbarEvent::Drop(
+                    i,
+                    pos2(winui::mx(x), o.y + menu_h() + 65.0),
+                ));
             }
         }
         if winui::focus_target(ui.ctx(), resp.id) {
@@ -2313,7 +2329,7 @@ pub fn toolbar(
             // The drop-down menu's top-left is the button's left edge at client y 85; in RTL its
             // top-right at the button's right edge.
             event = Some(if on_arrow {
-                ToolbarEvent::Drop(i, pos2(winui::mx(x), o.y + 85.0))
+                ToolbarEvent::Drop(i, pos2(winui::mx(x), o.y + menu_h() + 65.0))
             } else {
                 ToolbarEvent::Click(i)
             });
@@ -2333,7 +2349,10 @@ pub fn toolbar(
     {
         let enabled = all.get(k).is_some_and(|b| b.2);
         let dropdown = all.get(k).is_some_and(|b| is_dropdown(&b.0));
-        let at = pos2(winui::mx(lefts.get(k).copied().unwrap_or(o.x)), o.y + 85.0);
+        let at = pos2(
+            winui::mx(lefts.get(k).copied().unwrap_or(o.x)),
+            o.y + menu_h() + 65.0,
+        );
         event = ui.input_mut(|i| toolbar_keys(i, k, all.len(), enabled, dropdown, at));
     }
     event
@@ -2522,7 +2541,7 @@ pub fn categories(
     keys: bool,
 ) -> Option<TreeEvent> {
     let p = ui.painter().clone();
-    let y0 = o.y + pane_top() + MENU_H; // frame top
+    let y0 = o.y + pane_top() + menu_h(); // frame top
     // i18n: title of the side pane that lists the categories
     let caption = crate::i18n::t("Categories");
     let mut event = None;

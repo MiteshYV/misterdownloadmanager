@@ -158,6 +158,9 @@ egui-wgpu = { version = "0.37.0", default-features = false, features = ["macos-w
 # Sign-in secrets in the login keychain (unix.rs, #44); already in the tree through rustls's
 # platform verifier.
 security-framework = "3.7.0"
+# The menus in macOS's menu bar (macmenu.rs): NSMenu through Tauri's menu crate, on the same
+# objc2 and AppKit bindings as above; its GTK side (Linux) left out.
+muda = { version = "0.22.0", default-features = false }
 
 # Crash reports on Linux and macOS: thread and process ids, signals (unix.rs).
 [target.'cfg(unix)'.dependencies]

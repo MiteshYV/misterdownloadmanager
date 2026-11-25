@@ -3159,6 +3159,9 @@
 #. text in the Download video window
 #. choice in Download video's Part: cut where the video has a keyframe, the streams copied as they are (fast; it may start a little before From)
 	Quick cut, at keyframes	Quick cut, at keyframes
+#. text in macmenu.rs
+#. macOS: the app menu's last item, which quits MDM as File → Exit does
+	Quit Mister Download Manager	Quit Mister Download Manager
 #. text in the Options window
 #. Options → Sites Logins → Cookies for video sites: a note under the choices
 	Read on this computer only, and sent only to the video's site.	Read on this computer only, and sent only to the video's site.
@@ -3470,6 +3473,9 @@
 #. button: opens the DNS's details (how it's asked, its servers, a test)
 #. the trailing ... means it opens a window: keep it
 	Settings...	Settings...
+#. text in macmenu.rs
+#. macOS: the app menu's item that opens Options (every Mac app's Settings…)
+	Settings…	Settings…
 #. text in countries.rs
 #. a country's name (where a download's server is)
 	Seychelles	Seychelles
@@ -6165,7 +6171,10 @@ key	Up / Down	Up / Down
 #. menu command in the main window
 #. & marks the keyboard shortcut letter: keep one & before a letter of the translation
 menu	&About Mister Download Manager	&About Mister Download Manager
-#. menu command in the main window
+#. menu command in macmenu.rs
+#. & marks the keyboard shortcut letter: keep one & before a letter of the translation
+menu	&Add batch download	&Add batch download
+#. menu command in the main window; menu command in macmenu.rs
 #. & marks the keyboard shortcut letter: keep one & before a letter of the translation
 menu	&Add new download	&Add new download
 #. menu command in the main window
@@ -6266,6 +6275,9 @@ menu	&Stop Download	&Stop Download
 #. View → Font: the computer's own font, the default (Segoe UI on Windows)
 #. & marks the keyboard shortcut letter: keep one & before a letter of the translation
 menu	&System font	&System font
+#. menu command in macmenu.rs
+#. & marks the keyboard shortcut letter: keep one & before a letter of the translation
+menu	&Theme	&Theme
 #. menu command in the main window
 #. & marks the keyboard shortcut letter: keep one & before a letter of the translation
 menu	&Tray icon	&Tray icon
@@ -6381,7 +6393,7 @@ menu	Check for &updates...	Check for &updates...
 #. & marks the keyboard shortcut letter: keep one & before a letter of the translation
 #. the trailing ... means it opens a window: keep it
 menu	Choose a font &file...	Choose a font &file...
-#. menu command in the main window
+#. menu command in the main window; menu command in macmenu.rs
 #. View → Theme: MDM's own look, the default (IDM's layout, Windows 11's controls)
 menu	Classic	Classic
 #. menu command in the main window
@@ -6424,6 +6436,9 @@ menu	Download in order	Download in order
 #. menu command in the main window
 #. View menu: submenu choosing what draws MDM's windows: OpenGL, or Direct3D, Vulkan or Metal (graphics systems)
 menu	Draw with	Draw with
+#. menu command in macmenu.rs
+#. & marks the keyboard shortcut letter: keep one & before a letter of the translation
+menu	E&xit	E&xit
 #. menu command in the main window
 #. verb: save the download list to a file
 #. & marks the keyboard shortcut letter: keep one & before a letter of the translation
@@ -6478,7 +6493,7 @@ menu	Its first frame didn't show within 10 seconds	Its first frame didn't show w
 #. menu command in the main window
 #. View → Draw with: a greyed note under "… didn't start here"; why: MDM crashed or was closed while starting with it
 menu	Its last start ended before its first frame	Its last start ended before its first frame
-#. menu command in the main window
+#. menu command in the main window; menu command in macmenu.rs
 #. View → Theme: a style theme's name (macOS 26's look: glass, round corners), a name: keep "Liquid Glass" unless your language writes Apple's design name otherwise
 menu	Liquid Glass	Liquid Glass
 #. menu command in the main window

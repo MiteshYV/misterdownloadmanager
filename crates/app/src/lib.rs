@@ -42,6 +42,7 @@ mod launch;
 mod linkparts;
 mod list;
 mod lookwatch;
+mod macmenu;
 mod model;
 mod native;
 mod netwatch;

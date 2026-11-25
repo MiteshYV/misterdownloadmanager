@@ -1450,6 +1450,12 @@ pub struct App {
     tell_friend: Option<crate::help::TellFriend>,
     /// The language picker (first start, View → Language...).
     lang_picker: Option<crate::langpick::Picker>,
+    /// macOS: the system's menu bar, made from the same menus (macmenu.rs), once the window is.
+    #[cfg(target_os = "macos")]
+    mac_menu: Option<crate::macmenu::Bar<Cmd>>,
+    /// When the system's menu bar last took the menus' state.
+    #[cfg(target_os = "macos")]
+    mac_menu_synced: Option<std::time::Instant>,
     /// The video helpers' offer (the first start's, after the language).
     helpers: Option<crate::helpers::Helpers>,
     /// "Files already there", opened on its own by `/show existing-files` (screenshots and the
@@ -2331,6 +2337,10 @@ impl App {
             shortcuts: None,
             tell_friend: None,
             lang_picker: None,
+            #[cfg(target_os = "macos")]
+            mac_menu: None,
+            #[cfg(target_os = "macos")]
+            mac_menu_synced: None,
             helpers: None,
             shown_existing: None,
             extension: None,
@@ -10113,6 +10123,35 @@ impl App {
 
     // ---- menus -----------------------------------------------------------------------------
 
+    /// macOS: the system's menu bar brought up to date with the menus (their states at most
+    /// four times a second, a rebuild when one changed shape), and the command of an item chosen
+    /// in it since the last frame.
+    #[cfg(target_os = "macos")]
+    fn native_menu(&mut self, ctx: &egui::Context) -> Option<Cmd> {
+        let due = self
+            .mac_menu_synced
+            .is_none_or(|t| t.elapsed() >= std::time::Duration::from_millis(250));
+        if due {
+            let menus: Vec<(String, Vec<crate::macmenu::Node<Cmd>>)> = chrome::bar_titles()
+                .iter()
+                .enumerate()
+                .map(|(i, title)| {
+                    let (title, _) = chrome::plain(crate::i18n::tc("menubar", title));
+                    (title, crate::macmenu::nodes(i, &self.menu_entries(i)))
+                })
+                .collect();
+            let bar = self.mac_menu.get_or_insert_with(|| {
+                crate::macmenu::Bar::new(Cmd::About, Cmd::Options, Cmd::Exit)
+            });
+            let wake = ctx.clone();
+            bar.sync(&menus, move || wake.request_repaint());
+            self.mac_menu_synced = Some(std::time::Instant::now());
+            // Asked again while nothing else happens, so a state that changed shows.
+            ctx.request_repaint_after(std::time::Duration::from_millis(250));
+        }
+        self.mac_menu.as_ref()?.chosen()
+    }
+
     /// IDM 6.42's menus (notes/ui-spec/menus.md); unbuilt features are greyed out.
     fn menu_entries(&self, index: usize) -> Vec<MenuEntry<Cmd>> {
         use MenuEntry::{Item as I, Sep, Sub};
@@ -11240,7 +11279,7 @@ impl App {
     ) -> f32 {
         use crate::preview::{self, Shows, Summary};
         let ctx = ui.ctx().clone();
-        let top = o.y + chrome::MENU_H + chrome::pane_top();
+        let top = o.y + chrome::menu_h() + chrome::pane_top();
         let bottom = o.y + h - STRIP_H - 5.0;
         let right = o.x + w - 7.0;
         // As wide as it was left, the list keeping room of its own (a narrow window: the pane
@@ -11599,66 +11638,76 @@ impl App {
             }
         }
 
-        // Menu bar and its popups: which menu is open is chrome::menubar_next's to say.
-        if let Some(event) = chrome::menu_bar(ui, o, w, self.open_menu) {
-            if event == chrome::MenuBarEvent::Keys {
-                self.give_keys(Pane::Bar);
+        // Menu bar and its popups: which menu is open is chrome::menubar_next's to say. On
+        // macOS the menus are the system's, at the top of the screen (macmenu.rs).
+        if chrome::native_menubar() {
+            self.open_menu = None;
+            #[cfg(target_os = "macos")]
+            if let Some(c) = self.native_menu(&ctx) {
+                chosen = Some((c, None));
             }
-            self.open_menu = chrome::menubar_next(self.open_menu, event);
-        }
-        // A menu opened by Left or Right is drawn in the same pass as the one it replaces (a
-        // second turn): on X11 the bar's menus share one window (chrome::popup), and a pass
-        // without a menu closed it, a new window opening for the next (#277).
-        for _ in 0..2 {
-            let Some(i) = self.open_menu else { break };
-            let x = chrome::menus(ui.painter())[i].1;
-            let entries = self.menu_entries(i);
-            // Under the item's leading edge (the menu's top-right in RTL).
-            let at = pos2(winui::mx(o.x + x), o.y + chrome::MENU_H - 1.0);
-            let event = match chrome::popup_with(
-                &ctx,
-                MenuKind::Bar,
-                &format!("menu-{i}"),
-                at,
-                &entries,
-                &|c: &Cmd| c.hint(),
-                &|c: &Cmd| match c {
-                    // The escape hatch stays in the computer's own font, whatever font is in
-                    // use: a damaged file must not make the way back unreadable (#1489).
-                    Cmd::InterfaceFontSystem => Some(crate::winui::system_font()),
-                    _ => None,
-                },
-            ) {
-                PopupResult::Open => None,
-                PopupResult::Neighbor(d) => {
-                    let n = chrome::menus(ui.painter()).len() as i32;
-                    let j = (i as i32 + d).rem_euclid(n) as usize;
-                    chrome::start_keyboard(&ctx, &format!("menu-{j}"));
-                    Some(MenuBarEvent::Open(j))
+        } else {
+            if let Some(event) = chrome::menu_bar(ui, o, w, self.open_menu) {
+                if event == chrome::MenuBarEvent::Keys {
+                    self.give_keys(Pane::Bar);
                 }
-                PopupResult::Chosen(c) => {
-                    chosen = Some((c, None));
-                    Some(MenuBarEvent::Chosen)
-                }
-                PopupResult::Dismissed => {
-                    // Shut by a press on a title: its click (on release) is `menu_bar`'s. Not
-                    // by Escape with the pointer merely resting on the bar.
-                    let press =
-                        ui.input(|x| x.pointer.press_origin().filter(|_| x.pointer.any_pressed()));
-                    let press_on_title = press
-                        .is_some_and(|at| chrome::menubar_title_at(ui.painter(), o, at).is_some());
-                    Some(MenuBarEvent::Dismissed { press_on_title })
-                }
-            };
-            let neighbor = matches!(event, Some(MenuBarEvent::Open(_)));
-            if let Some(event) = event {
                 self.open_menu = chrome::menubar_next(self.open_menu, event);
             }
-            if !neighbor {
-                break;
+            // A menu opened by Left or Right is drawn in the same pass as the one it replaces (a
+            // second turn): on X11 the bar's menus share one window (chrome::popup), and a pass
+            // without a menu closed it, a new window opening for the next (#277).
+            for _ in 0..2 {
+                let Some(i) = self.open_menu else { break };
+                let x = chrome::menus(ui.painter())[i].1;
+                let entries = self.menu_entries(i);
+                // Under the item's leading edge (the menu's top-right in RTL).
+                let at = pos2(winui::mx(o.x + x), o.y + chrome::MENU_H - 1.0);
+                let event = match chrome::popup_with(
+                    &ctx,
+                    MenuKind::Bar,
+                    &format!("menu-{i}"),
+                    at,
+                    &entries,
+                    &|c: &Cmd| c.hint(),
+                    &|c: &Cmd| match c {
+                        // The escape hatch stays in the computer's own font, whatever font is in
+                        // use: a damaged file must not make the way back unreadable (#1489).
+                        Cmd::InterfaceFontSystem => Some(crate::winui::system_font()),
+                        _ => None,
+                    },
+                ) {
+                    PopupResult::Open => None,
+                    PopupResult::Neighbor(d) => {
+                        let n = chrome::menus(ui.painter()).len() as i32;
+                        let j = (i as i32 + d).rem_euclid(n) as usize;
+                        chrome::start_keyboard(&ctx, &format!("menu-{j}"));
+                        Some(MenuBarEvent::Open(j))
+                    }
+                    PopupResult::Chosen(c) => {
+                        chosen = Some((c, None));
+                        Some(MenuBarEvent::Chosen)
+                    }
+                    PopupResult::Dismissed => {
+                        // Shut by a press on a title: its click (on release) is `menu_bar`'s. Not
+                        // by Escape with the pointer merely resting on the bar.
+                        let press = ui.input(|x| {
+                            x.pointer.press_origin().filter(|_| x.pointer.any_pressed())
+                        });
+                        let press_on_title = press.is_some_and(|at| {
+                            chrome::menubar_title_at(ui.painter(), o, at).is_some()
+                        });
+                        Some(MenuBarEvent::Dismissed { press_on_title })
+                    }
+                };
+                let neighbor = matches!(event, Some(MenuBarEvent::Open(_)));
+                if let Some(event) = event {
+                    self.open_menu = chrome::menubar_next(self.open_menu, event);
+                }
+                if !neighbor {
+                    break;
+                }
             }
         }
-
         // The keys go round the toolbar, the Categories tree and the download list with Tab and
         // Shift+Tab (`tab_to`), while no menu is open and no text box has them (#1190: the
         // toolbar couldn't be reached at all). A press anywhere takes them from the toolbar (the
@@ -11772,7 +11821,7 @@ impl App {
             let cat_w = (self.settings.categories_width as f32).clamp(100.0, max_w);
             let right = o.x + 6.0 + cat_w;
             let split = winui::rect(egui::Rect::from_min_max(
-                pos2(right, o.y + chrome::MENU_H + chrome::pane_top()),
+                pos2(right, o.y + chrome::menu_h() + chrome::pane_top()),
                 pos2(right + 4.0, o.y + h - STRIP_H - 5.0),
             ));
             let sr = ui.interact(
@@ -11890,7 +11939,7 @@ impl App {
             w - 7.0
         };
         let outer = egui::Rect::from_min_max(
-            pos2(o.x + list_left, o.y + chrome::MENU_H + chrome::pane_top()),
+            pos2(o.x + list_left, o.y + chrome::menu_h() + chrome::pane_top()),
             pos2(o.x + list_right, o.y + h - STRIP_H - 4.0),
         );
         self.list.menu_open = self.popup.is_some() || self.open_menu.is_some();

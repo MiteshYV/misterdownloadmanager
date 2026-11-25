@@ -14946,7 +14946,7 @@ impl App {
         crate::crash::step(crate::crash::Step::MainWindow);
         winui::name_window(ui, crate::MAIN_TITLE);
         egui::CentralPanel::no_frame()
-            .frame(egui::Frame::new().fill(chrome::WINDOW_BG()))
+            .frame(egui::Frame::new().fill(crate::theme::glassy(chrome::WINDOW_BG(), 0.35)))
             .show(ui, |ui| self.paint(ui));
         // A menu opened from the keyboard, said to screen readers (#328).
         chrome::tell_screen_readers(&ctx);

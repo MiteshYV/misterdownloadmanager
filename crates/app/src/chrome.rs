@@ -213,7 +213,7 @@ pub fn menu_bar(ui: &mut Ui, o: Pos2, width: f32, open: Option<usize>) -> Option
         o.y,
         o.x + width - 1.0,
         o.y + MENU_H - 2.0,
-        MENUBAR_BG(),
+        crate::theme::glassy(MENUBAR_BG(), 0.0),
     );
     // The bar's last row (light: #f2f2f2; dark: the bar's own).
     fill(
@@ -222,7 +222,7 @@ pub fn menu_bar(ui: &mut Ui, o: Pos2, width: f32, open: Option<usize>) -> Option
         o.y + MENU_H - 2.0,
         o.x + width - 1.0,
         o.y + MENU_H - 2.0,
-        MENUBAR_BOTTOM(),
+        crate::theme::glassy(MENUBAR_BOTTOM(), 0.0),
     );
     fill(
         &p,
@@ -2071,7 +2071,10 @@ pub fn toolbar(
         (0.0, 0.0)
     };
     let band = Rect::from_min_size(pos2(o.x, top + 2.0), vec2(width, band_h));
-    p.rect_filled(band, 0.0, WINDOW_BG());
+    // With glass behind the window, the band is the window's own (already see-through).
+    if !crate::theme::glass() {
+        p.rect_filled(band, 0.0, WINDOW_BG());
+    }
     let mut x = o.x;
     let mut event = None;
     let is_dropdown =
@@ -2535,7 +2538,11 @@ pub fn categories(
         event = Some(TreeEvent::Close);
     }
     let tree = Rect::from_min_max(pos2(o.x + 8.0, y0 + 18.0), pos2(right - 3.0, bottom - 9.0));
-    p.rect_filled(winui::rect(tree), 0.0, TREE_BG());
+    p.rect_filled(
+        winui::rect(tree),
+        0.0,
+        crate::theme::glassy(TREE_BG(), 0.45),
+    );
 
     // Scroll bars (notes/ui-spec/scrollbars.md "Categories tree"): by rows vertically, by
     // pixels horizontally; each shows when the content overflows (Win32 rule).
@@ -2714,7 +2721,9 @@ pub fn categories(
         }
         if let Some(open) = r.expander {
             if crate::theme::colors().tree_chevrons {
-                winui::fill_l(&tp, o.x + 11.0, top, o.x + 26.0, top + 15.0, TREE_BG());
+                if !crate::theme::glass() {
+                    winui::fill_l(&tp, o.x + 11.0, top, o.x + 26.0, top + 15.0, TREE_BG());
+                }
                 chevron(&tp, o.x, top, open, r.selected);
             } else {
                 // Classic box; nothing opaque around it, so connectors run up to it.

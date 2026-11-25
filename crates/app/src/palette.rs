@@ -456,6 +456,18 @@ pub struct Controls {
     /// The Categories tree: Explorer's (dotted connectors, the selection behind the label), or
     /// a sidebar's (no connectors, the selection a rounded band across the row).
     pub tree: TreeLook,
+    /// The main window's background: opaque, or (macOS) the system's glass behind it, which
+    /// its toolbar, menu bar and Categories let through.
+    pub window: WindowLook,
+}
+/// What the main window stands on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WindowLook {
+    /// Its own colour, opaque.
+    Opaque,
+    /// macOS: Liquid Glass behind it (macOS 26; the older frosted material before), from the
+    /// next start; elsewhere, opaque.
+    Glass,
 }
 /// How the Categories tree is drawn.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -614,6 +626,7 @@ impl Controls {
         toolbar: ToolbarLook::Classic,
         list_progress: ListProgress::Text,
         tree: TreeLook::Classic,
+        window: WindowLook::Opaque,
     };
 
     /// Sets the control with this key to the style named `value`; false when either is unknown.
@@ -661,6 +674,8 @@ impl Controls {
             ("list-progress", "bar") => self.list_progress = ListProgress::Bar,
             ("tree", "classic") => self.tree = TreeLook::Classic,
             ("tree", "sidebar") => self.tree = TreeLook::Sidebar,
+            ("window", "opaque") => self.window = WindowLook::Opaque,
+            ("window", "glass") => self.window = WindowLook::Glass,
             _ => return false,
         }
         true

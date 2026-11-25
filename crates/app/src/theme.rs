@@ -3158,3 +3158,64 @@ mod status_width_tests {
         println!("widest: {} px, {}", widest.0, widest.1);
     }
 }
+
+/// Whether the main window has the system's glass behind it (macOS, `unix::glass_window`): its
+/// own backgrounds are then drawn see-through ([`glassy`]).
+static GLASS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn set_glass(on: bool) {
+    GLASS.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn glass() -> bool {
+    GLASS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Whether the theme `id` (a built-in's, as the settings name it) asks for glass behind the main
+/// window. Read before the window is made, when the theme isn't chosen yet: a window is see-through
+/// only if it was made so.
+#[cfg_attr(not(any(target_os = "macos", test)), allow(dead_code))]
+pub fn wants_glass(id: &str) -> bool {
+    crate::palette::builtins()
+        .iter()
+        .any(|t| t.id == id && t.controls.window == crate::palette::WindowLook::Glass)
+}
+
+/// A main-window background `c` while glass is behind it: `keep` of it (0 to 1), so the glass
+/// shows through; `c` itself otherwise.
+pub fn glassy(c: egui::Color32, keep: f32) -> egui::Color32 {
+    glassy_when(glass(), c, keep)
+}
+
+fn glassy_when(on: bool, c: egui::Color32, keep: f32) -> egui::Color32 {
+    if on {
+        c.gamma_multiply(keep.clamp(0.0, 1.0))
+    } else {
+        c
+    }
+}
+
+#[cfg(test)]
+mod glass_tests {
+    use egui::Color32;
+
+    /// Without glass a background is drawn as it is; with it, only the part kept.
+    #[test]
+    fn glass_lets_the_background_through() {
+        let c = Color32::from_rgb(0xee, 0xf1, 0xf6);
+        assert_eq!(super::glassy_when(false, c, 0.3), c);
+        let g = super::glassy_when(true, c, 0.0);
+        assert_eq!(g.a(), 0);
+        let half = super::glassy_when(true, c, 0.5);
+        assert!(half.a() > 100 && half.a() < 156, "{half:?}");
+    }
+
+    /// Liquid Glass asks for it; the classic look doesn't.
+    #[test]
+    fn liquid_glass_wants_glass() {
+        assert!(super::wants_glass("liquid-glass"));
+        assert!(!super::wants_glass("classic"));
+        assert!(!super::wants_glass("aqua"));
+    }
+}

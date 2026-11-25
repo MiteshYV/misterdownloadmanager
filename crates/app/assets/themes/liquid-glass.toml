@@ -21,6 +21,7 @@ focus = "ring"
 toolbar = "glass"
 list-progress = "bar"
 tree = "sidebar"
+window = "glass"
 
 [sizes]
 radius = 10

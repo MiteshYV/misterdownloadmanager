@@ -770,6 +770,66 @@ pub fn warn_temporary_copy() {
     spawn(Command::new("open").arg("/Applications"));
 }
 
+/// macOS: the system's glass behind the main window (Liquid Glass, `[controls] window =
+/// "glass"`): macOS 26's `NSGlassEffectView`, else the frosted `NSVisualEffectView` of earlier
+/// versions. The window was made see-through (lib.rs); its content view, winit's, stays its
+/// content view (winit takes that view to be its own), and the glass goes beside it in the
+/// window's frame view, below it. True when it is there: the main window's own backgrounds are
+/// then drawn see-through (`theme::glassy`). AppKit on the main thread only.
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
+pub fn glass_window() -> bool {
+    use objc2::rc::Retained;
+    use objc2_app_kit::{
+        NSApplication, NSAutoresizingMaskOptions, NSView, NSVisualEffectBlendingMode,
+        NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindowOrderingMode,
+    };
+    let Some(mtm) = objc2::MainThreadMarker::new() else {
+        return false;
+    };
+    let app = NSApplication::sharedApplication(mtm);
+    let Some(window) = app
+        .windows()
+        .iter()
+        .find(|w| w.title().to_string() == crate::MAIN_TITLE)
+    else {
+        tracing::warn!("glass: the main window wasn't found");
+        return false;
+    };
+    let Some(content) = window.contentView() else {
+        return false;
+    };
+    // SAFETY: the content view's superview is the window's frame view, which the window holds
+    // for as long as it is open; it is only used in this call.
+    let Some(frame) = (unsafe { content.superview() }) else {
+        return false;
+    };
+    let glass: Retained<NSView> = match objc2::runtime::AnyClass::get(c"NSGlassEffectView") {
+        // SAFETY: NSGlassEffectView (AppKit, macOS 26) is an NSView subclass, and `+new` returns
+        // a new, retained instance of it.
+        Some(class) => unsafe { objc2::msg_send![class, new] },
+        None => {
+            let frosted = NSVisualEffectView::new(mtm);
+            frosted.setMaterial(NSVisualEffectMaterial::UnderWindowBackground);
+            frosted.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
+            frosted.setState(NSVisualEffectState::FollowsWindowActiveState);
+            Retained::into_super(frosted)
+        }
+    };
+    glass.setFrame(frame.bounds());
+    glass.setAutoresizingMask(
+        NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable,
+    );
+    frame.addSubview_positioned_relativeTo(&glass, NSWindowOrderingMode::Below, Some(&content));
+    let liquid = objc2::runtime::AnyClass::get(c"NSGlassEffectView").is_some();
+    tracing::info!(
+        "glass behind the main window: {}",
+        if liquid { "Liquid Glass" } else { "frosted" }
+    );
+    crate::theme::set_glass(true);
+    true
+}
+
 /// The `.app` bundle `exe` is in (`…/Name.app/Contents/MacOS/program`).
 #[cfg_attr(not(any(target_os = "macos", test)), allow(dead_code))]
 fn app_bundle(exe: &Path) -> Option<PathBuf> {

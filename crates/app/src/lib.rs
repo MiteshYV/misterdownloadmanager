@@ -618,6 +618,14 @@ fn app() -> eframe::Result {
     if let Some([x, y, ..]) = saved {
         viewport = viewport.with_position([x as f32, y as f32]);
     }
+    // macOS: a theme with glass behind the main window (Liquid Glass) needs a see-through window,
+    // which only a new window can be: a theme chosen later shows its glass from the next start.
+    #[cfg(target_os = "macos")]
+    let glass = theme::wants_glass(&theme::startup_id(&loaded.settings.theme)) && !offscreen();
+    #[cfg(target_os = "macos")]
+    if glass {
+        viewport = viewport.with_transparent(true);
+    }
     if offscreen() {
         viewport = viewport.with_position(offscreen_at());
     }
@@ -664,6 +672,11 @@ fn app() -> eframe::Result {
             loaded,
             start,
         )));
+        // macOS: the glass behind the window, once it is made (above).
+        #[cfg(target_os = "macos")]
+        if glass && !unix::glass_window() {
+            tracing::warn!("glass: not installed, the window stays opaque");
+        }
         // macOS: run from the disk image it came in, or from App Translocation's copy: the
         // person is asked to move it to Applications, where browser integration and the login
         // item work (neither is set up from a temporary place).
@@ -729,6 +742,16 @@ impl eframe::App for Shared {
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         eframe::App::ui(&mut *self.0.borrow_mut(), ui, frame);
+    }
+
+    /// With glass behind the main window (macOS), the frame starts see-through, so the glass
+    /// shows wherever the window's own backgrounds let it.
+    fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {
+        if theme::glass() {
+            [0.0; 4]
+        } else {
+            eframe::App::clear_color(&*self.0.borrow(), visuals)
+        }
     }
 }
 

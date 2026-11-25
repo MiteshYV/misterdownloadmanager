@@ -975,6 +975,9 @@
 	Connections and Limits	Connections and Limits
 #. text in the Options window
 	Connections:	Connections:
+#. text in unix.rs
+#. button of the macOS alert: keep running MDM from where it is
+	Continue	Continue
 #. link (opens a web page) in the Help menu's windows (About, updates, shortcuts, Tell a friend)
 	Contributors	Contributors
 #. text in countries.rs
@@ -2009,6 +2012,9 @@
 #. text in extracting archives (a download's log, the Archive password window)
 #. why an archive wasn't extracted (after "Couldn't extract {name}: ")
 	it is not an archive MDM extracts	it is not an archive MDM extracts
+#. text in unix.rs
+#. macOS alert text at start; "it" is MDM. Browser integration: catching downloads from the browsers
+	It is running from its disk image or a temporary copy. Browser integration and starting with your Mac stay off until it runs from Applications: drag it into Applications, then open it from there.	It is running from its disk image or a temporary copy. Browser integration and starting with your Mac stay off until it runs from Applications: drag it into Applications, then open it from there.
 #. text in extracting archives (a download's log, the Archive password window)
 #. why an archive wasn't extracted (after "Couldn't extract {name}: ")
 	it needs a password	it needs a password
@@ -2511,6 +2517,9 @@
 #. text in a dialog box
 #. choice in Delete category: what happens to the category's downloads
 	Move its downloads to General	Move its downloads to General
+#. text in unix.rs
+#. macOS alert title at start, when MDM runs from its disk image or a temporary copy
+	Move Mister Download Manager to Applications	Move Mister Download Manager to Applications
 #. what a keyboard shortcut does in the Help menu's windows (About, updates, shortcuts, Tell a friend)
 	Move or rename the selected download	Move or rename the selected download
 #. text in a download's Properties window
@@ -3514,6 +3523,9 @@
 #. text in the Options window
 #. checkbox: a click on MDM's icon in the notification area (system tray) shows a small panel over it with the downloads now running, their progress, Pause and Cancel; unticked, the click shows or hides the main window
 	Show downloads when the notification area icon is clicked	Show downloads when the notification area icon is clicked
+#. text in unix.rs
+#. button of the macOS alert: opens Finder to drag MDM into Applications
+	Show in Finder	Show in Finder
 #. button in a dialog box
 #. button: shows these downloads in MDM's list, selected
 	Show in list	Show in list

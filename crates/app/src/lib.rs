@@ -664,6 +664,13 @@ fn app() -> eframe::Result {
             loaded,
             start,
         )));
+        // macOS: run from the disk image it came in, or from App Translocation's copy: the
+        // person is asked to move it to Applications, where browser integration and the login
+        // item work (neither is set up from a temporary place).
+        #[cfg(target_os = "macos")]
+        if !offscreen() {
+            unix::warn_temporary_copy();
+        }
         // The session's end saves as an Exit saves, and MDM ends. Windows (shut down, restart,
         // sign out, an installer's Restart Manager): before Windows is answered. Linux (logout,
         // shutdown): logind's SIGTERM at the next frame (`Shared::logic`, heard since the start:

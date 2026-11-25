@@ -4700,8 +4700,20 @@ pub fn enter_pressed(ui: &Ui) -> bool {
 }
 
 /// Escape that no control took first (an open list or picker closes itself): a dialog's Cancel.
+/// On macOS ⌘W too, which closes the front window there as its close button does.
 pub fn escape_pressed(ui: &Ui) -> bool {
-    ui.input(|i| i.key_pressed(egui::Key::Escape))
+    ui.input(|i| i.key_pressed(egui::Key::Escape) || closes_window(i))
+}
+
+/// ⌘W on macOS (Command alone, no Shift or Option): close the front window. Never on Windows
+/// and Linux, where Ctrl+W isn't a dialog's Cancel.
+pub fn closes_window(i: &egui::InputState) -> bool {
+    cfg!(target_os = "macos") && is_close_window(i.modifiers) && i.key_pressed(egui::Key::W)
+}
+
+/// The modifiers of ⌘W: Command alone.
+pub fn is_close_window(m: egui::Modifiers) -> bool {
+    m.mac_cmd && !m.shift && !m.alt && !m.ctrl
 }
 
 /// Take `key` (without modifiers) for a control that answers it, so the dialog under it doesn't

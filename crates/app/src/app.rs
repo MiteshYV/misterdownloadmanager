@@ -1320,6 +1320,28 @@ fn preview_key_free() -> bool {
     !crate::chrome::menubar_letters().iter().any(|l| l == "p")
 }
 
+/// macOS's delete keys for the list (`(remove, remove with files)`): ⌘⌫ as Finder's Move to
+/// Trash, ⌘⌥⌫ with the files. Nothing on Windows and Linux, whose keyboards have Delete.
+fn mac_delete(m: egui::Modifiers, pressed: impl Fn(egui::Key) -> bool) -> (bool, bool) {
+    mac_delete_keys(cfg!(target_os = "macos"), m, pressed)
+}
+
+fn mac_delete_keys(
+    mac: bool,
+    m: egui::Modifiers,
+    pressed: impl Fn(egui::Key) -> bool,
+) -> (bool, bool) {
+    if !mac || !m.mac_cmd || m.shift || m.ctrl || !pressed(egui::Key::Backspace) {
+        return (false, false);
+    }
+    (!m.alt, m.alt)
+}
+
+/// macOS's ⌘, (Settings…, in every Mac app) opens Options.
+fn mac_settings_key(mac: bool, m: egui::Modifiers, pressed: impl Fn(egui::Key) -> bool) -> bool {
+    mac && m.mac_cmd && !m.shift && !m.alt && !m.ctrl && pressed(egui::Key::Comma)
+}
+
 /// Where Tab (Shift+Tab: `back`) takes the keys from `from` (`None`: nothing had them, after a
 /// click on the toolbar or the strip), round; the tree and the preview pane left out while they
 /// are hidden.
@@ -12002,6 +12024,20 @@ impl App {
             }) {
                 chosen = Some((Cmd::MoveRename, None));
             }
+            // macOS: ⌘, opens Options (Settings… in every Mac app); ⌘W closes the window as its
+            // close button does (Keep running when closing the window decides what that means).
+            let mac = cfg!(target_os = "macos");
+            let (settings_key, close_key) = ctx.input(|i| {
+                (
+                    mac_settings_key(mac, i.modifiers, |k| i.key_pressed(k)),
+                    crate::winui::closes_window(i),
+                )
+            });
+            if settings_key {
+                chosen = Some((Cmd::Options, None));
+            } else if close_key {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
             // Alt+P: the preview pane, as Explorer's (#1368), unless a menu bar title takes P.
             if preview_key_free()
                 && ctx.input_mut(|i| i.consume_key(egui::Modifiers::ALT, egui::Key::P))
@@ -12026,14 +12062,18 @@ impl App {
             && ctx.memory(|m| m.focused().is_none())
         {
             // On Windows egui reports Shift+Delete as Cut (Ctrl+X is Cut too, without Shift).
+            // A Mac's keyboard has no Delete key (its "delete" is Backspace): ⌘⌫ removes, as
+            // Move to Trash in Finder, and ⌘⌥⌫ removes with the files.
             let (del, shift_del) = ctx.input(|i| {
+                let (mac_del, mac_del_files) = mac_delete(i.modifiers, |k| i.key_pressed(k));
                 (
-                    i.key_pressed(egui::Key::Delete) && !i.modifiers.shift,
+                    (i.key_pressed(egui::Key::Delete) && !i.modifiers.shift) || mac_del,
                     // Windows reports it as Cut; macOS and Linux as the key.
-                    i.modifiers.shift
+                    (i.modifiers.shift
                         && !i.modifiers.command
                         && (i.events.iter().any(|e| matches!(e, egui::Event::Cut))
-                            || i.key_pressed(egui::Key::Delete)),
+                            || i.key_pressed(egui::Key::Delete)))
+                        || mac_del_files,
                 )
             });
             if shift_del {
@@ -19690,5 +19730,68 @@ mod stop_and_keep_tests {
             .len();
         assert!(kept > 0);
         assert_eq!(row.size, Some(kept));
+    }
+}
+
+#[cfg(test)]
+mod mac_keys_tests {
+    use super::{mac_delete_keys, mac_settings_key};
+    use egui::{Key, Modifiers};
+
+    fn cmd() -> Modifiers {
+        Modifiers {
+            mac_cmd: true,
+            command: true,
+            ..Modifiers::NONE
+        }
+    }
+
+    /// A Mac keyboard has no Delete key: ⌘⌫ removes the selected downloads, ⌘⌥⌫ with their
+    /// files, as Finder's Move to Trash; Backspace alone (or with Shift) does nothing.
+    #[test]
+    fn command_backspace_removes_on_a_mac_only() {
+        let bs = |k| k == Key::Backspace;
+        assert_eq!(mac_delete_keys(true, cmd(), bs), (true, false));
+        let cmd_alt = Modifiers { alt: true, ..cmd() };
+        assert_eq!(mac_delete_keys(true, cmd_alt, bs), (false, true));
+        assert_eq!(mac_delete_keys(true, Modifiers::NONE, bs), (false, false));
+        let cmd_shift = Modifiers {
+            shift: true,
+            ..cmd()
+        };
+        assert_eq!(mac_delete_keys(true, cmd_shift, bs), (false, false));
+        assert_eq!(
+            mac_delete_keys(true, cmd(), |k| k == Key::A),
+            (false, false)
+        );
+        assert_eq!(mac_delete_keys(false, cmd(), bs), (false, false));
+    }
+
+    /// ⌘, opens Options on a Mac, and only there.
+    #[test]
+    fn command_comma_opens_options_on_a_mac_only() {
+        let comma = |k| k == Key::Comma;
+        assert!(mac_settings_key(true, cmd(), comma));
+        assert!(!mac_settings_key(false, cmd(), comma));
+        assert!(!mac_settings_key(true, Modifiers::NONE, comma));
+        assert!(!mac_settings_key(
+            true,
+            Modifiers {
+                shift: true,
+                ..cmd()
+            },
+            comma
+        ));
+    }
+
+    /// ⌘W is Command alone: ⌘⇧W and ⌃W aren't.
+    #[test]
+    fn command_w_is_command_alone() {
+        assert!(crate::winui::is_close_window(cmd()));
+        assert!(!crate::winui::is_close_window(Modifiers {
+            shift: true,
+            ..cmd()
+        }));
+        assert!(!crate::winui::is_close_window(Modifiers::CTRL));
     }
 }

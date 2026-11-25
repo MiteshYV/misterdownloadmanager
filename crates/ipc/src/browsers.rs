@@ -786,7 +786,43 @@ fn same_file(a: &Path, b: &Path) -> bool {
 /// Translocation), or in an archive tool's own extraction folder wherever its temporary folder
 /// was set.
 pub fn in_temporary_folder(program: &Path) -> bool {
-    temporary(program, &temporary_folders())
+    temporary(program, &temporary_folders()) || on_disk_image(program)
+}
+
+/// macOS: a program run straight from a disk image Finder opened (`/Volumes/<name>/…`, mounted
+/// read-only), instead of from Applications: once the image is ejected, a registration or a
+/// login item naming it leads nowhere. A writable volume there (an external disk) is a place
+/// of its own, as any folder.
+pub fn on_disk_image(program: &Path) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        use rustix::fs::{StatVfsMountFlags, statvfs};
+        disk_image(&full_path(program), |volume| {
+            statvfs(volume).is_ok_and(|s| s.f_flag.contains(StatVfsMountFlags::RDONLY))
+        })
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = program;
+        false
+    }
+}
+
+/// [`on_disk_image`] with the volume's read-only check given: `program` (a full path) is under
+/// `/Volumes/<name>`, and that volume is read-only.
+#[cfg_attr(not(any(target_os = "macos", test)), allow(dead_code))]
+fn disk_image(program: &Path, read_only: impl Fn(&Path) -> bool) -> bool {
+    use std::path::Component;
+    let mut parts = program.components();
+    match (parts.next(), parts.next(), parts.next(), parts.next()) {
+        (
+            Some(Component::RootDir),
+            Some(Component::Normal(volumes)),
+            Some(Component::Normal(name)),
+            Some(_),
+        ) if volumes == "Volumes" => read_only(&Path::new("/Volumes").join(name)),
+        _ => false,
+    }
 }
 
 /// The system's temporary folders: this process's, the system's own, and the usual ones.
@@ -1345,6 +1381,28 @@ mod tests {
             assert_eq!(manifest_program(&m), None, "{bad}");
         }
         assert_eq!(manifest_program(&d.path().join("none.json")), None);
+    }
+
+    /// macOS: an app run from the disk image it came in (`/Volumes/<name>`, read-only) is
+    /// temporary, as the image is ejected; one on a writable external disk, or a path that only
+    /// looks alike, isn't.
+    #[test]
+    fn a_program_on_a_disk_image_is_temporary() {
+        let app = Path::new(
+            "/Volumes/Mister Download Manager/Mister Download Manager.app/Contents/MacOS/misterdownloadmanager",
+        );
+        let image = |v: &Path| v == Path::new("/Volumes/Mister Download Manager");
+        assert!(disk_image(app, image));
+        assert!(!disk_image(app, |_| false), "a writable external disk");
+        assert!(!disk_image(
+            Path::new("/Volumes/Mister Download Manager"),
+            image
+        ));
+        assert!(!disk_image(
+            Path::new("/Applications/Mister Download Manager.app/Contents/MacOS/x"),
+            |_| true
+        ));
+        assert!(!disk_image(Path::new("/Users/a/Volumes/X/y"), |_| true));
     }
 
     /// #818: a copy run from inside an archive, or from anywhere under the temporary folder, is

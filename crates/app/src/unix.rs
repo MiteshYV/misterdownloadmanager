@@ -703,11 +703,102 @@ pub fn set_run_at_startup(on: bool) {
         let _ = std::fs::remove_file(&file);
         return;
     }
+    // A copy in a temporary place (a disk image, App Translocation's, an archive's): the entry
+    // would start nothing once it is gone. Not written; Options shows it off.
+    if crate::extension::temporary_copy() {
+        tracing::warn!(
+            "start with the session: not set, this copy runs from a temporary place ({})",
+            exe.display()
+        );
+        return;
+    }
     let text = startup_entry(&exe, cfg!(target_os = "macos"));
     if let Some(dir) = file.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
     let _ = std::fs::write(&file, text);
+}
+
+/// macOS: MDM runs from a temporary place (the disk image it came in, or the copy App
+/// Translocation runs an app from before it is moved out of Downloads): a native alert before
+/// the window asks the person to move it to Applications. Show in Finder opens the disk image's
+/// window (or Downloads) beside Applications, to drag it across; Continue runs it as it is,
+/// without browser integration or the login item. AppKit on the main thread only.
+#[cfg(target_os = "macos")]
+pub fn warn_temporary_copy() {
+    use objc2_app_kit::{NSAlert, NSAlertFirstButtonReturn, NSAlertStyle, NSApplication};
+    use objc2_foundation::NSString;
+    if !crate::extension::temporary_copy() {
+        return;
+    }
+    let Some(mtm) = objc2::MainThreadMarker::new() else {
+        return;
+    };
+    let exe = program().unwrap_or_default();
+    let bundle = app_bundle(&exe);
+    let on_image = mdm_ipc::browsers::on_disk_image(&exe);
+    tracing::warn!(
+        "running from a temporary place ({}): asked to move to Applications",
+        exe.display()
+    );
+    let alert = NSAlert::new(mtm);
+    alert.setAlertStyle(NSAlertStyle::Warning);
+    alert.setMessageText(&NSString::from_str(crate::i18n::t(
+        // i18n: macOS alert title at start, when MDM runs from its disk image or a temporary copy
+        "Move Mister Download Manager to Applications",
+    )));
+    alert.setInformativeText(&NSString::from_str(crate::i18n::t(
+        // i18n: macOS alert text at start; "it" is MDM. Browser integration: catching downloads from the browsers
+        "It is running from its disk image or a temporary copy. Browser integration and starting with your Mac stay off until it runs from Applications: drag it into Applications, then open it from there.",
+    )));
+    // i18n: button of the macOS alert: opens Finder to drag MDM into Applications
+    alert.addButtonWithTitle(&NSString::from_str(crate::i18n::t("Show in Finder")));
+    // i18n: button of the macOS alert: keep running MDM from where it is
+    alert.addButtonWithTitle(&NSString::from_str(crate::i18n::t("Continue")));
+    NSApplication::sharedApplication(mtm).activate();
+    if alert.runModal() != NSAlertFirstButtonReturn {
+        return;
+    }
+    match bundle.filter(|_| on_image) {
+        Some(app) => spawn(Command::new("open").arg("-R").arg(app)),
+        None => {
+            if let Some(home) = std::env::var_os("HOME") {
+                spawn(Command::new("open").arg(PathBuf::from(home).join("Downloads")));
+            }
+        }
+    }
+    spawn(Command::new("open").arg("/Applications"));
+}
+
+/// The `.app` bundle `exe` is in (`…/Name.app/Contents/MacOS/program`).
+#[cfg_attr(not(any(target_os = "macos", test)), allow(dead_code))]
+fn app_bundle(exe: &Path) -> Option<PathBuf> {
+    exe.ancestors()
+        .find(|p| p.extension().is_some_and(|e| e == "app"))
+        .map(Path::to_path_buf)
+}
+
+#[cfg(test)]
+mod app_bundle_tests {
+    use std::path::{Path, PathBuf};
+
+    /// The alert's Show in Finder reveals the app itself, found from its program's path.
+    #[test]
+    fn the_app_bundle_is_found_from_its_program() {
+        let exe = Path::new(
+            "/Volumes/Mister Download Manager/Mister Download Manager.app/Contents/MacOS/misterdownloadmanager",
+        );
+        assert_eq!(
+            super::app_bundle(exe),
+            Some(PathBuf::from(
+                "/Volumes/Mister Download Manager/Mister Download Manager.app"
+            ))
+        );
+        assert_eq!(
+            super::app_bundle(Path::new("/usr/bin/misterdownloadmanager")),
+            None
+        );
+    }
 }
 
 /// The startup entry written again for this program, at each start: one written without its
@@ -716,6 +807,11 @@ pub fn set_run_at_startup(on: bool) {
 /// upgrade replaced it while it ran, an AppImage moved since. One turned off in the desktop's
 /// startup settings stays off, and another copy's that is still there stays that copy's.
 pub fn update_run_at_startup() {
+    // A temporary copy (a disk image, App Translocation's) leaves the entry of the copy that
+    // stays as it is: written for this one, it would start nothing once this one is gone.
+    if crate::extension::temporary_copy() {
+        return;
+    }
     let (Some(file), Some(exe)) = (startup_file(), program()) else {
         return;
     };
@@ -3844,44 +3940,52 @@ pub fn trim_heap() {
     }
 }
 
-/// Move `files` to the Trash (an archive and its volumes after extracting, #37), with the
-/// system's own tool: `gio trash` (GLib's, on most Linux desktops) or `trash-put`; on macOS
-/// `trash` (macOS 14 and later), else the Finder. False when none could: the files are kept.
+/// Move `files` to the Trash (an archive and its volumes after extracting, #37). macOS:
+/// Foundation's own `trashItemAtURL` (every macOS MDM runs on; the `trash` command came only
+/// with macOS 15, and driving the Finder needs an Automation permission MDM never declares).
+/// Linux: the system's own tool, `gio trash` (GLib's, on most desktops) or `trash-put`. False
+/// when none could: the files are kept.
 pub fn to_trash(files: &[PathBuf]) -> bool {
     if files.is_empty() {
         return true;
     }
-    let run = |cmd: &mut Command| {
-        cmd.stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .is_ok_and(|s| s.success())
-    };
-    if cfg!(target_os = "macos") {
-        if run(Command::new("trash").args(files)) {
-            return true;
-        }
-        // The Finder moves them as a person would (it may ask once to let MDM drive it).
-        let list: Vec<String> = files
-            .iter()
-            .map(|f| {
-                let p = f
-                    .display()
-                    .to_string()
-                    .replace('\\', "\\\\")
-                    .replace('"', "\\\"");
-                format!("POSIX file \"{p}\"")
-            })
-            .collect();
-        let script = format!(
-            "tell application \"Finder\" to delete {{{}}}",
-            list.join(", ")
-        );
-        return run(Command::new("osascript").arg("-e").arg(script));
+    #[cfg(target_os = "macos")]
+    {
+        mac_trash(files)
     }
-    run(Command::new("gio").arg("trash").arg("--").args(files))
-        || run(Command::new("trash-put").arg("--").args(files))
+    #[cfg(not(target_os = "macos"))]
+    {
+        let run = |cmd: &mut Command| {
+            cmd.stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .is_ok_and(|s| s.success())
+        };
+        run(Command::new("gio").arg("trash").arg("--").args(files))
+            || run(Command::new("trash-put").arg("--").args(files))
+    }
+}
+
+/// macOS: each file to the Trash of its own volume, as Finder's Move to Trash (Put Back knows
+/// where it was). True when all went; one that couldn't is logged and the rest still go.
+#[cfg(target_os = "macos")]
+fn mac_trash(files: &[PathBuf]) -> bool {
+    use objc2_foundation::{NSFileManager, NSString, NSURL};
+    let manager = NSFileManager::defaultManager();
+    let mut all = true;
+    for f in files {
+        let url = NSURL::fileURLWithPath(&NSString::from_str(&f.to_string_lossy()));
+        if let Err(e) = manager.trashItemAtURL_resultingItemURL_error(&url, None) {
+            tracing::warn!(
+                "to the Trash: {} stays ({})",
+                f.display(),
+                e.localizedDescription()
+            );
+            all = false;
+        }
+    }
+    all
 }
 
 /// Is process `pid` still running?

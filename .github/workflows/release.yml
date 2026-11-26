@@ -444,7 +444,7 @@ jobs:
           $files = Get-ChildItem dist -File | Sort-Object Name
           $sums = $files | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" }
           Set-Content -Encoding ascii dist/SHA256SUMS.txt $sums
-          # Signed with MDM's release key (fingerprint 5826D399249DE856EA087D802E293C28E8A69D74):
+          # Signed with this fork's release key (MiteshYV/misterdownloadmanager) (fingerprint 7B2A74E0B7A377F67349D271A4023FEB261D137D):
           # MDM updates itself only from a list it signed
           # (crates/tools/src/update.rs; the public key is crates/tools/keys/mdm-release.asc).
           if ($env:MDM_RELEASE_KEY) {
@@ -452,7 +452,7 @@ jobs:
             Set-Content -Encoding ascii $key $env:MDM_RELEASE_KEY
             gpg --batch --quiet --import $key
             Remove-Item $key
-            gpg --batch --yes --detach-sign --local-user 5826D399249DE856EA087D802E293C28E8A69D74 `
+            gpg --batch --yes --detach-sign --local-user 7B2A74E0B7A377F67349D271A4023FEB261D137D `
               --output dist/SHA256SUMS.txt.sig dist/SHA256SUMS.txt
             if ($LASTEXITCODE) { throw "signing SHA256SUMS.txt failed" }
             gpg --batch --verify dist/SHA256SUMS.txt.sig dist/SHA256SUMS.txt

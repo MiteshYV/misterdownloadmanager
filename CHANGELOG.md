@@ -3,6 +3,27 @@
 Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 `.github/workflows/release.yml`).
 
+## [0.5.201]
+
+The first release of the Mac fork ([MiteshYV/misterdownloadmanager](https://github.com/MiteshYV/misterdownloadmanager)), built from the original project's work after 0.5.2 (listed under **Unreleased** below). Its versions are the original's patch number times 100 plus the fork's own release number: 0.5.201 is the first one based on 0.5.2.
+
+### Added
+
+- **Liquid Glass** (macOS): the default theme on a Mac. The window's background is the system's glass, with a sidebar, a toolbar of capsule buttons and Lucide file-type icons. **View → Theme** switches back to any other theme.
+- **The system's menu bar** (macOS): MDM's menus are in the Mac's own menu bar, with **⌘,** for Options and **⌘W** to close a window.
+- **Quarantine**: a torrent downloads into a hidden folder beside its destination, and its files are checked before they go there. A program, script, installer or app, a file that isn't what its name says, a name like `film.mp4.exe`, an archive locked with a password or holding a program, and on a Mac an app or installer not signed by an identified developer, hold it for you to **Release**, **Keep** in quarantine or **Delete**. Nothing in quarantine is opened. **Options → Downloads → Virus checking settings** turns it on for every download too.
+- **ClamAV**: when it is installed (`brew install clamav`), it scans every download in quarantine too, and MDM keeps its virus definitions up to date (ClamAV's `freshclam`, when they are more than a day old). The quarantine window warns when they are three days old or more.
+
+### Changed
+
+- **Updates come from this fork only**: **Check for updates** reads this repository's releases, and **Update now** installs only a release whose checksum list this fork signed (key 7B2A74E0B7A377F67349D271A4023FEB261D137D). Releases signed by the original project are refused.
+- Crash reports open an issue on this fork.
+
+### Fixed
+
+- macOS: run from its disk image or from a copy macOS moved aside (App Translocation), MDM asks to be moved to Applications instead of setting up a login item there.
+- macOS: files are put in the Trash with Finder's own Trash (Put Back works).
+
 ## [Unreleased]
 
 ### Added

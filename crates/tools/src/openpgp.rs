@@ -658,6 +658,8 @@ mod tests {
 
     /// 2026-11-01, when the pinned keys were checked.
     const NOV_2026: u32 = 1_793_491_200;
+    /// 2026-12-01: the fork's release key was made on 2026-11-26.
+    const DEC_2026: u32 = 1_796_083_200;
 
     #[test]
     fn the_pinned_keys_have_the_fingerprints_we_expect() {
@@ -667,8 +669,8 @@ mod tests {
             keys[0].clone()
         };
         assert_eq!(
-            fingerprint(MDM_KEY),
-            "5826D399249DE856EA087D802E293C28E8A69D74"
+            signers(MDM_KEY, DEC_2026),
+            ["7B2A74E0B7A377F67349D271A4023FEB261D137D"]
         );
         assert_eq!(
             fingerprint(YTDLP_KEY),

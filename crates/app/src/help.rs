@@ -12,14 +12,14 @@ use crate::dialogs::{Outcome, window};
 use crate::winui::{self, ButtonKind, r};
 
 /// The repository: problem reports, releases, source, licences.
-pub const REPO: &str = "https://github.com/anefzaoui/misterdownloadmanager";
+pub const REPO: &str = "https://github.com/MiteshYV/misterdownloadmanager";
 /// The creator's GitHub Sponsors page: Help → Support MDM, About's last line. The website, the
 /// extension's popup and the repository's Sponsor button (.github/FUNDING.yml) point there too.
 pub const SPONSORS: &str = "https://github.com/sponsors/anefzaoui";
-const LATEST: &str = "https://api.github.com/repos/anefzaoui/misterdownloadmanager/releases/latest";
+const LATEST: &str = "https://api.github.com/repos/MiteshYV/misterdownloadmanager/releases/latest";
 /// The repository on GitHub (`owner/name`): its release pages when GitHub's API refuses for its
 /// rate limit (#1337).
-const REPO_PATH: &str = "anefzaoui/misterdownloadmanager";
+const REPO_PATH: &str = "MiteshYV/misterdownloadmanager";
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const COMMIT: &str = env!("MDM_COMMIT");
 /// While MDM runs, the automatic check comes again this often (it also checks at every start).

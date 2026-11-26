@@ -51,8 +51,8 @@ use sha2::{Digest, Sha256};
 
 /// yt-dlp's release signing key, from its repository (`public.key`).
 const YTDLP_KEY: &str = include_str!("../keys/yt-dlp.asc");
-/// Mister Download Manager's release signing key (Ed25519, fingerprint
-/// 5826D399249DE856EA087D802E293C28E8A69D74): release.yml signs each release's SHA256SUMS.txt
+/// This fork's (MiteshYV/misterdownloadmanager) release signing key (Ed25519, fingerprint
+/// 7B2A74E0B7A377F67349D271A4023FEB261D137D; the original project's, 5826D399…A69D74, is no longer trusted): release.yml signs each release's SHA256SUMS.txt
 /// with it (the MDM_RELEASE_KEY secret), and MDM updates itself only from a list it signed.
 const MDM_KEY: &str = include_str!("../keys/mdm-release.asc");
 /// Where releases come from: GitHub's API, else its pages (`github`, #1337).
@@ -622,6 +622,15 @@ mod tests {
         // Each key signs for itself only.
         assert!(!signed_by_ytdlp(sums, sig));
         assert!(!signed_by_mdm(SUMS, SIG));
+    }
+
+    /// This fork updates only from its own releases: a list the original project signed (with
+    /// its key, 5826D399…A69D74) is refused.
+    #[test]
+    fn the_original_projects_signature_is_refused() {
+        let sums = include_bytes!("../tests/fixtures/mdm-SHA256SUMS.txt");
+        let theirs = include_bytes!("../tests/fixtures/upstream-mdm-SHA256SUMS.txt.sig");
+        assert!(!signed_by_mdm(sums, theirs));
     }
 
     #[test]

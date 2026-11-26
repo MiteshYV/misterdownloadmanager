@@ -484,11 +484,13 @@ jobs:
           # @-mentions (tools/contributors.py thanks; the maintainer, Claude and bots aren't
           # counted). Nobody, or GitHub not answering, leaves it out; it never stops the release.
           $thanks = ""
-          try {
+          # Only in the original repository: elsewhere (a fork) its @-mentions would notify the
+          # original project's contributors about someone else's release.
+          if ("${{ github.repository }}" -eq "anefzaoui/misterdownloadmanager") { try {
             $thanks = (python3 tools/contributors.py thanks "${{ github.ref_name }}" | Out-String).Trim()
           } catch {
             Write-Warning "The contributors couldn't be listed: $_"
-          }
+          } }
           if ($thanks) { $thanks = "`n`n" + $thanks }
           $all = (Get-ChildItem dist -File).FullName
           if ($m.Success -and $m.Groups[1].Value.Trim()) {
@@ -503,13 +505,17 @@ jobs:
           }
           # The website links to the latest published release: rebuild it now that the files are
           # there (a release made with this token starts no workflow by itself).
-          gh workflow run pages.yml --ref main
+          # (The original repository's website; a fork has none.)
+          if ("${{ github.repository }}" -eq "anefzaoui/misterdownloadmanager") {
+            gh workflow run pages.yml --ref main
+          }
 
   docker:
     # A published Docker image for servers and NAS systems (docs/server.md, Dockerfile).
     name: docker
     needs: publish
-    if: startsWith(github.ref, 'refs/tags/')
+    # The original repository's image only: a fork publishes no Docker image unless it opts in.
+    if: startsWith(github.ref, 'refs/tags/') && github.repository == 'anefzaoui/misterdownloadmanager'
     runs-on: ubuntu-latest
     permissions:
       packages: write

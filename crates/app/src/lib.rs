@@ -686,6 +686,14 @@ fn app() -> eframe::Result {
         if !offscreen() {
             unix::warn_temporary_copy();
         }
+        // ClamAV's virus definitions refreshed in the background when they are old, so the
+        // quarantine's scans use recent ones (nothing when ClamAV isn't installed).
+        if !offscreen() {
+            std::thread::Builder::new()
+                .name("freshclam".into())
+                .spawn(quarantine::refresh_definitions)
+                .ok();
+        }
         // The session's end saves as an Exit saves, and MDM ends. Windows (shut down, restart,
         // sign out, an installer's Restart Manager): before Windows is answered. Linux (logout,
         // shutdown): logind's SIGTERM at the next frame (`Shared::logic`, heard since the start:

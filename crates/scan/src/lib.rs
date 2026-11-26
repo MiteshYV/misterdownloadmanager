@@ -20,12 +20,14 @@
 //! A clean report ([`Report::clean`]) has no concern in any file and no ClamAV finding.
 
 mod clamav;
+pub mod freshclam;
 mod kinds;
 mod macsig;
 
 use std::path::{Path, PathBuf};
 
 pub use clamav::{Clam, find_clamscan};
+pub use freshclam::Definitions;
 pub use kinds::Kind;
 
 /// Something about a file the person should look at before it leaves quarantine.
@@ -85,6 +87,8 @@ pub struct Report {
     /// Whether 7-Zip looked inside the RAR and 7z archives (false: it isn't installed, and
     /// they were only named).
     pub opened_rar_7z: bool,
+    /// ClamAV's virus definitions when it scanned (None: it isn't used, or has none).
+    pub definitions: Option<Definitions>,
 }
 
 impl Report {
@@ -149,10 +153,12 @@ pub fn scan(root: &Path, files: &[PathBuf], opts: &Options) -> Report {
         }
         None => Clam::NotInstalled,
     };
+    let definitions = opts.clamscan.as_deref().and_then(freshclam::definitions);
     Report {
         files: reports,
         clamav,
         opened_rar_7z: opts.seven_zip.is_some(),
+        definitions,
     }
 }
 

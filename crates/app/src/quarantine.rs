@@ -304,8 +304,23 @@ impl Quarantine {
     }
 }
 
-/// Every file in `dir` (a download's quarantine), checked with the tools this computer has.
+/// ClamAV's virus definitions refreshed when they are more than a day old (`freshclam`, at
+/// most every few hours: `mdm_scan::freshclam`). Blocks while it runs: from a background
+/// thread. Nothing when ClamAV isn't installed, there is no data folder, or in tests.
+pub fn refresh_definitions() {
+    if cfg!(test) {
+        return;
+    }
+    let (Some(clamscan), Some(data)) = (mdm_scan::find_clamscan(), mdm_ipc::data_dir()) else {
+        return;
+    };
+    let _ = mdm_scan::freshclam::refresh_if_stale(&clamscan, &data);
+}
+
+/// Every file in `dir` (a download's quarantine), checked with the tools this computer has
+/// (ClamAV's definitions refreshed first when they are old).
 pub fn check(dir: &Path) -> mdm_scan::Report {
+    refresh_definitions();
     let mut entries: Vec<PathBuf> = std::fs::read_dir(dir)
         .map(|r| r.flatten().map(|e| PathBuf::from(e.file_name())).collect())
         .unwrap_or_default();
@@ -378,8 +393,28 @@ fn kind_text(k: mdm_scan::Kind) -> String {
     .to_owned()
 }
 
-/// What ClamAV did, for the window's last line.
-fn clam_text(c: &mdm_scan::Clam) -> String {
+/// What ClamAV did, for the window's last line, with a warning when its virus definitions
+/// are old (they miss what is new).
+fn clam_text(r: &mdm_scan::Report) -> String {
+    let said = clam_said(&r.clamav);
+    let days = r
+        .definitions
+        .map(|d| d.days_old(std::time::SystemTime::now()));
+    match days {
+        Some(n)
+            if n >= mdm_scan::freshclam::WARN_DAYS && r.clamav != mdm_scan::Clam::NotInstalled =>
+        {
+            crate::i18n::fmt(
+                // i18n: quarantine window: after what ClamAV said ({said}), its virus definitions are {n} days old (n is 3 or more)
+                crate::i18n::t("{said}; its virus definitions are {n} days old"),
+                &[("said", &said), ("n", &n.to_string())],
+            )
+        }
+        _ => said,
+    }
+}
+
+fn clam_said(c: &mdm_scan::Clam) -> String {
     use mdm_scan::Clam;
     match c {
         // i18n: quarantine window: ClamAV, a free virus scanner, isn't on this computer
@@ -500,7 +535,7 @@ impl Review {
                     &p,
                     o.x + 12.0,
                     y + 6.0,
-                    &clam_text(&self.report.clamav),
+                    &clam_text(&self.report),
                     winui::MUTED(),
                 );
                 let row = winui::buttons_light_right(

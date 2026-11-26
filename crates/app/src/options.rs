@@ -5292,8 +5292,8 @@ fn virus_dialog(
         o.x + 14.0,
         o.y + 148.0,
         if clam {
-            // i18n: Options → Downloads → Virus checking: ClamAV, a free virus scanner, was found and is used too
-            crate::i18n::t("ClamAV is installed: it scans every download in quarantine too.")
+            // i18n: Options → Downloads → Virus checking: ClamAV, a free virus scanner, was found and is used too; MDM keeps its virus definitions current
+            crate::i18n::t("ClamAV is installed and kept up to date: it scans every download too.")
         } else {
             // i18n: Options → Downloads → Virus checking: ClamAV, a free virus scanner, isn't installed; where to get it
             crate::i18n::t(

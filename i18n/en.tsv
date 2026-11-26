@@ -917,8 +917,8 @@
 #. {name} = a file name (keep the braces as they are)
 	ClamAV found {name}	ClamAV found {name}
 #. text in the Options window
-#. Options → Downloads → Virus checking: ClamAV, a free virus scanner, was found and is used too
-	ClamAV is installed: it scans every download in quarantine too.	ClamAV is installed: it scans every download in quarantine too.
+#. Options → Downloads → Virus checking: ClamAV, a free virus scanner, was found and is used too; MDM keeps its virus definitions current
+	ClamAV is installed and kept up to date: it scans every download too.	ClamAV is installed and kept up to date: it scans every download too.
 #. button in the download list; button in the Options window
 #. verb: clears this filter
 	Clear	Clear
@@ -5388,6 +5388,10 @@
 #. text in helpers.rs
 #. Video helpers: the computer's own JavaScript runtime, used as it is (MDM needn't download one); {runtime} = its name and version ("Node.js 24.11.0", "Deno 2.5.6"), {path} = where it is
 	{runtime}, your system's, nothing to download: {path}	{runtime}, your system's, nothing to download: {path}
+#. text in quarantine.rs
+#. quarantine window: after what ClamAV said ({said}), its virus definitions are {n} days old (n is 3 or more)
+#. {n} = a number (keep the braces as they are)
+	{said}; its virus definitions are {n} days old	{said}; its virus definitions are {n} days old
 #. text in errors.rs
 #. a debrid service's error: too many requests; MDM waits and retries
 	{service} asks to slow down; MDM will try again in a minute	{service} asks to slow down; MDM will try again in a minute

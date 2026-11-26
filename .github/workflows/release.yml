@@ -11,12 +11,20 @@
 #   system leaves its files out.
 # - Run by hand (Actions -> Release -> Run workflow) it only builds and keeps them as artifacts:
 #   nothing is published, and nothing is sent to addons.mozilla.org or the Chrome Web Store.
+#   With "Publish a release" ticked it publishes too, as a pushed tag would: GitHub makes the tag
+#   v<Cargo.toml's version> on the commit it built (refused if that tag exists already). Nothing
+#   is sent to the add-on stores either way.
 name: Release
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish a release: tag v<Cargo.toml's version> on this commit"
+        type: boolean
+        default: false
 
 # Read-only for every job; a job that needs more says so in its own block (publish).
 permissions:
@@ -406,7 +414,7 @@ jobs:
     # x64 Windows is checked below by its files: the Windows job's result says failure when any
     # processor's build failed, and only x64's must be there.
     if: >-
-      always() && startsWith(github.ref, 'refs/tags/') && needs.windows.result != 'cancelled' &&
+      always() && (startsWith(github.ref, 'refs/tags/') || inputs.publish) && needs.windows.result != 'cancelled' &&
       needs.extension.result == 'success'
     needs: [windows, extension, linux, macos]
     runs-on: ubuntu-latest
@@ -434,8 +442,21 @@ jobs:
           MDM_RELEASE_KEY: ${{ secrets.MDM_RELEASE_KEY }}
         shell: pwsh
         run: |
+          # The tag: the pushed one, or (Run workflow with Publish ticked) v<Cargo.toml's version>,
+          # made by the release below on the commit this run built; never one that exists.
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $tag = "${{ github.ref_name }}"
+            $target = @()
+          } else {
+            $cargo = [regex]::Match((Get-Content Cargo.toml -Raw), '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value
+            $tag = "v$cargo"
+            gh api "repos/${{ github.repository }}/git/ref/tags/$tag" --silent 2>$null
+            if ($LASTEXITCODE -eq 0) { throw "the tag $tag exists already: raise the version in Cargo.toml first" }
+            $global:LASTEXITCODE = 0
+            $target = @("--target", "${{ github.sha }}")
+          }
           # The release waits for x64 Windows (the names every copy before had): its files or none.
-          $v = "${{ github.ref_name }}".TrimStart("v")
+          $v = $tag.TrimStart("v")
           foreach ($f in "setup.exe", "portable.zip", "x64.zip") {
             if (-not (Test-Path "dist/MisterDownloadManager-$v-$f")) { throw "x64 Windows' $f isn't there: no release" }
           }
@@ -465,10 +486,9 @@ jobs:
           # (#1613: the release has no file for Firefox, and the stores' copies update themselves),
           # then the invitation to try the macOS builds when they are there (Linux's files are no
           # longer "-experimental").
-          $v = "${{ github.ref_name }}".TrimStart("v")
           $log = Get-Content CHANGELOG.md -Raw -ErrorAction SilentlyContinue
           $m = [regex]::Match("$log", "(?ms)^## \[$([regex]::Escape($v))\][^\n]*\n(.*?)(?=^## |\z)")
-          $title = "Mister Download Manager ${{ github.ref_name }}"
+          $title = "Mister Download Manager $tag"
           $stores = "**The browser add-on:** [Add to Firefox](https://addons.mozilla.org/firefox/addon/mister-download-manager/) " +
             "(Zen, LibreWolf too) · [Add to Chrome, Edge, Brave, Opera, Vivaldi](https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp). " +
             "The stores' copy updates itself; ``-extension-chromium.zip`` is only for a Chromium browser that can't use its store.`n`n"
@@ -487,7 +507,7 @@ jobs:
           # Only in the original repository: elsewhere (a fork) its @-mentions would notify the
           # original project's contributors about someone else's release.
           if ("${{ github.repository }}" -eq "anefzaoui/misterdownloadmanager") { try {
-            $thanks = (python3 tools/contributors.py thanks "${{ github.ref_name }}" | Out-String).Trim()
+            $thanks = (python3 tools/contributors.py thanks "$tag" | Out-String).Trim()
           } catch {
             Write-Warning "The contributors couldn't be listed: $_"
           } }
@@ -496,12 +516,12 @@ jobs:
           if ($m.Success -and $m.Groups[1].Value.Trim()) {
             # Links into the repository (docs/x.md) would resolve against the release's page:
             # point them at the tagged files.
-            $notes = $m.Groups[1].Value.Trim() -replace '\]\((?![a-z]+:|#)([^)\s]+)\)', '](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/$1)'
+            $notes = $m.Groups[1].Value.Trim() -replace '\]\((?![a-z]+:|#)([^)\s]+)\)', ("](https://github.com/${{ github.repository }}/blob/$tag/" + '$1)')
             Set-Content -Encoding utf8 notes.md ($stores + $invite + $notes + $thanks)
-            gh release create "${{ github.ref_name }}" --latest --title $title --notes-file notes.md $all
+            gh release create $tag @target --latest --title $title --notes-file notes.md $all
           } else {
             Set-Content -Encoding utf8 notes.md ($stores + $invite + $thanks.Trim())
-            gh release create "${{ github.ref_name }}" --latest --title $title --notes-file notes.md --generate-notes $all
+            gh release create $tag @target --latest --title $title --notes-file notes.md --generate-notes $all
           }
           # The website links to the latest published release: rebuild it now that the files are
           # there (a release made with this token starts no workflow by itself).

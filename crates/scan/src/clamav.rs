@@ -109,7 +109,7 @@ pub(crate) fn read(code: Option<i32>, stdout: &str, stderr: &str) -> Clam {
 
 #[cfg(test)]
 mod tests {
-    use super::{Clam, candidates, read};
+    use super::{Clam, read};
     use std::path::PathBuf;
 
     /// Found, clean and failed, as clamscan words them.
@@ -148,7 +148,7 @@ mod tests {
     #[cfg(not(windows))]
     #[test]
     fn homebrews_folders_are_looked_in() {
-        let c = candidates(Some("/usr/bin:/bin".into()));
+        let c = super::candidates(Some("/usr/bin:/bin".into()));
         assert_eq!(c[0], PathBuf::from("/usr/bin/clamscan"));
         assert!(c.contains(&PathBuf::from("/opt/homebrew/bin/clamscan")));
         assert!(c.contains(&PathBuf::from("/usr/local/bin/clamscan")));

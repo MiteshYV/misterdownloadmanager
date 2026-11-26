@@ -131,10 +131,18 @@ fn a_torrent_with_a_hidden_program_needs_attention() {
             .concerns
             .contains(&Concern::Runs(Kind::WindowsProgram))
     );
-    assert_eq!(
-        of("Codec Pack.pkg").concerns,
-        vec![Concern::Runs(Kind::MacInstaller)]
-    );
+    // On macOS the installer is also checked for a signature (`pkgutil`): this made-up one
+    // has none.
+    let pkg = &of("Codec Pack.pkg").concerns;
+    assert_eq!(pkg[0], Concern::Runs(Kind::MacInstaller));
+    if cfg!(target_os = "macos") {
+        assert!(
+            matches!(pkg.as_slice(), [_, Concern::Unsigned(_)]),
+            "{pkg:?}"
+        );
+    } else {
+        assert_eq!(pkg.len(), 1, "{pkg:?}");
+    }
     assert_eq!(
         of("play.command").concerns,
         vec![Concern::Runs(Kind::Script)]

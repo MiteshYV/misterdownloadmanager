@@ -54,6 +54,6 @@ When ClamAV is installed (`brew install clamav`), it scans every download in qua
 ## Installing
 
 1. From the [latest release](https://github.com/MiteshYV/misterdownloadmanager/releases/latest), download `MisterDownloadManager-<version>-macos-arm64-experimental.dmg` for Apple Silicon, or the `-macos-x86_64-` one for Intel.
-2. Open it and drag **Mister Download Manager** to **Applications**.
-3. The app isn't notarised by Apple. The first time, right-click it in Applications, choose **Open**, then **Open** again.
+2. Open it and drag **Mister Download Manager** onto the **Applications** folder beside it.
+3. The app isn't notarised by Apple, so the first time macOS says it couldn't check it for malware. Click **Done**, then go to **System Settings → Privacy & Security**, find *"Mister Download Manager" was blocked* and click **Open Anyway**. You only do this once.
 4. For virus scanning, install ClamAV too: `brew install clamav`.

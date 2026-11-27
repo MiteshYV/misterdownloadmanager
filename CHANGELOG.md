@@ -3,6 +3,16 @@
 Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 `.github/workflows/release.yml`).
 
+## [0.5.202]
+
+### Changed
+
+- **The Mac installer window looks like a Mac installer**: opening the `.dmg` shows a window of a fixed size with no toolbar or sidebar, the app on the left, an arrow, and Applications on the right, at full icon size over a Liquid Glass background, with the app's icon on the disk. Drag the app onto Applications to install it.
+
+### Not changed
+
+- macOS still says Apple couldn't check the app for malware the first time it opens: that goes away only with an Apple Developer ID and notarization. Until then: open it once, then **System Settings → Privacy & Security → Open Anyway**.
+
 ## [0.5.201]
 
 The first release of the Mac fork ([MiteshYV/misterdownloadmanager](https://github.com/MiteshYV/misterdownloadmanager)), built from the original project's work after 0.5.2 (listed under **Unreleased** below). Its versions are the original's patch number times 100 plus the fork's own release number: 0.5.201 is the first one based on 0.5.2.

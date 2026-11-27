@@ -3,7 +3,7 @@
 #   MisterDownloadManager-<version>-macos-arm64-experimental.dmg   Apple Silicon
 #   MisterDownloadManager-<version>-macos-x86_64-experimental.dmg  Intel
 # One app per processor, each half the size of a universal one (#25), ad-hoc signed: without an
-# Apple Developer ID, macOS asks before the first start (right-click the app -> Open).
+# Apple Developer ID, macOS asks before the first start (System Settings -> Privacy & Security -> Open Anyway).
 # The app carries the Safari extension (tools/safari). Safari loads an ad-hoc signed one only with
 # Develop -> Allow Unsigned Extensions (each time Safari starts); signed with a Developer ID
 # (MDM_MACOS_IDENTITY="Developer ID Application: ..."), it is an ordinary extension.
@@ -49,6 +49,11 @@ for s in 16 32 128 256 512; do
   sips -z "$d" "$d" "$root/art/Mister Download Manager.png" --out "$set_dir/icon_${s}x${s}@2x.png" >/dev/null
 done
 iconutil -c icns "$set_dir" -o "$stage/AppIcon.icns"
+
+# dmgbuild, pinned, in a virtual environment of its own (Homebrew's Python refuses global installs).
+python3 -m venv "$stage/dmgbuild-venv"
+"$stage/dmgbuild-venv/bin/pip" install --quiet dmgbuild==1.6.7 ds_store==1.3.4 mac_alias==2.2.4
+dmgbuild="$stage/dmgbuild-venv/bin/dmgbuild"
 
 dmgs=()
 for pair in "${targets[@]}"; do
@@ -149,12 +154,14 @@ EOF
     rm -f "$stage/$arch/notarize.zip"
   fi
 
-  # The disk image: the app next to a link to Applications, to drag it there. LZMA (ULMO, macOS
-  # 10.15 and later; the app needs 11) packs it tighter than zlib (UDZO).
-  ln -s /Applications "$stage/$arch/dmg/Applications"
+  # The disk image: the standard installer window, the app next to a link to Applications to
+  # drag it there, over a background with an arrow (tools/installer/macos: dmgbuild writes the
+  # window's layout without Finder; LZMA, ULMO).
   rm -f "$dist/$name.dmg"
-  hdiutil create -volname "Mister Download Manager" -srcfolder "$stage/$arch/dmg" -ov -format ULMO \
-    "$dist/$name.dmg"
+  "$dmgbuild" -s "$root/tools/installer/macos/dmg_settings.py" \
+    -D app="$app" -D icon="$stage/AppIcon.icns" \
+    -D background="$root/tools/installer/macos/dmg-background.png" \
+    "Mister Download Manager" "$dist/$name.dmg"
   if [ -n "${MDM_NOTARY_PROFILE:-}" ]; then
     codesign --force --sign "$sign" --timestamp "$dist/$name.dmg"
     xcrun notarytool submit "$dist/$name.dmg" --keychain-profile "$MDM_NOTARY_PROFILE" --wait

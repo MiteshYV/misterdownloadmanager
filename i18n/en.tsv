@@ -457,7 +457,7 @@
 #. text in remote.rs
 #. remote control page (on a phone): tab: every download
 	All	All
-#. item in the Categories tree in the main window
+#. item in the Categories tree in the main window; message or event log entry in the main window
 	All Downloads	All Downloads
 #. message or event log entry in the main window; text in standard windows
 	All files	All files
@@ -3466,6 +3466,9 @@
 #. noun: the tool that starts and stops queues on time
 #. noun: opens the Scheduler (the tool that starts queues on time)
 	Scheduler	Scheduler
+#. text in the main window (menus, toolbar, Categories pane)
+#. placeholder of the toolbar's search field (it opens Find)
+	Search downloads	Search downloads
 #. text in langpick.rs
 	Search:	Search:
 #. text in the Batch download window

@@ -7,6 +7,8 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 ### Changed
 
+- **The Liquid Glass look is laid out like a Mac app**: a toolbar with the view's name and count, its buttons as icons in glass capsules (their names on hover) and a search field that opens Find; a sidebar inset in glass with Library, Categories, Queues and Safety → Quarantine, each with its count; the list as a rounded glass card with two-line rows (the file over its category, its icon on a soft tile), no grid lines and a rounded selection, showing Name, Size, Status, Transfer rate and Time left (the other columns are a right-click on its header away). Buttons in dialogs are flat capsules with no line under them. The Classic look keeps the Windows layout.
+
 - **The Mac installer window looks like a Mac installer**: opening the `.dmg` shows a window of a fixed size with no toolbar or sidebar, the app on the left, an arrow, and Applications on the right, at full icon size over a Liquid Glass background, with the app's icon on the disk. Drag the app onto Applications to install it.
 
 - **The browser add-on on a Mac looks like the Mac app**: the download button over videos is a frosted glass capsule in the Mac's blue, with round buttons and a glass menu of rounded rows; the toolbar popup has soft glass surfaces, a segmented control for its tabs, capsule buttons, the Mac's switches and focus ring, and the system's font, in light and dark. Windows and Linux keep their look. It comes with this release's `-extension-chromium.zip` (load it unpacked): the Chrome Web Store's copy is the original project's.

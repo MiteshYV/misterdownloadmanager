@@ -36,6 +36,8 @@ pub(crate) enum View {
     Finished(Option<Category>),
     /// A queue (index into `App::queues`).
     Queue(usize),
+    /// The downloads in quarantine: being checked, or held for review (Liquid Glass's sidebar).
+    Quarantine,
 }
 
 /// What was being added when its address turned out to be in the list already.
@@ -2301,6 +2303,7 @@ impl App {
         let known = |c: Option<Category>| c.is_none_or(|c| Category::all().contains(&c));
         let view = match settings.view {
             Some(View::Queue(q)) if q < queues.len() => View::Queue(q),
+            Some(View::Quarantine) => View::Quarantine,
             Some(v @ View::Cat(c)) if known(Some(c)) => v,
             Some(v @ (View::Unfinished(c) | View::Finished(c))) if known(c) => v,
             _ => View::All,
@@ -2830,6 +2833,7 @@ impl App {
             private: it
                 .private_mark(self.settings.keep_private_downloads)
                 .map(|m| m.tip().to_owned()),
+            kind: crate::i18n::t(&it.category.label()).to_owned(),
         }
     }
 
@@ -2894,6 +2898,7 @@ impl App {
             View::Unfinished(c) => i.status != Status::Complete && in_cat(c),
             View::Finished(c) => i.status == Status::Complete && in_cat(c),
             View::Queue(q) => self.queues.get(q).is_some_and(|q| q.items.contains(&i.id)),
+            View::Quarantine => i.quarantine.is_some(),
         }
     }
 
@@ -11344,6 +11349,9 @@ impl App {
 
     /// The Categories tree: each row, the view it selects (None: just toggles) and its branch.
     fn tree_rows(&self) -> Vec<(TreeRow<'static>, Option<View>, Branch)> {
+        if crate::theme::current().controls.tree == crate::palette::TreeLook::Sidebar {
+            return self.sidebar_rows();
+        }
         let cur = self.view;
         let row = |level, label: &'static str, expander, icon, badge, view: Option<View>| TreeRow {
             level,
@@ -11353,6 +11361,8 @@ impl App {
             icon,
             badge,
             count: None,
+            heading: false,
+            shield: false,
         };
         let mut rows = Vec::new();
         // Silk icons in IDM's roles: folder, folder + green arrow, folder + tick, page stacks.
@@ -11375,6 +11385,8 @@ impl App {
                                 icon: category_icon(c),
                                 badge: None,
                                 count: None,
+                                heading: false,
+                                shield: false,
                             },
                             Some(v),
                             Branch::Leaf,
@@ -11438,6 +11450,8 @@ impl App {
                         icon: stack.clone(),
                         badge: queue.sync.then_some("tick"),
                         count: None,
+                        heading: false,
+                        shield: false,
                     },
                     view,
                     Branch::Leaf,
@@ -11450,6 +11464,98 @@ impl App {
             if row.level == 0
                 && let Some(v) = view
             {
+                let n = self.items.iter().filter(|i| self.in_view(*v, i)).count();
+                row.count = (n > 0).then_some(n);
+            }
+        }
+        rows
+    }
+
+    /// Liquid Glass's sidebar, as a Mac app's: flat sections under headings (Library,
+    /// Categories, Queues, Safety), every row a view with its count; nothing opens or shuts.
+    fn sidebar_rows(&self) -> Vec<(TreeRow<'static>, Option<View>, Branch)> {
+        let cur = self.view;
+        let heading = |label: &'static str| {
+            (
+                TreeRow {
+                    level: 0,
+                    label: label.into(),
+                    expander: None,
+                    selected: false,
+                    icon: IconKey::Themed("cat-folder", "folder"),
+                    badge: None,
+                    count: None,
+                    heading: true,
+                    shield: false,
+                },
+                None,
+                Branch::Leaf,
+            )
+        };
+        let item = |label: std::borrow::Cow<'static, str>, icon, view: View| {
+            (
+                TreeRow {
+                    level: 0,
+                    label,
+                    expander: None,
+                    selected: view == cur,
+                    icon,
+                    badge: None,
+                    count: None,
+                    heading: false,
+                    shield: false,
+                },
+                Some(view),
+                Branch::Leaf,
+            )
+        };
+        let mut rows = vec![
+            // i18n: Liquid Glass's sidebar: the heading over All Downloads, Unfinished and Finished
+            heading("Library"),
+            item(
+                "All Downloads".into(),
+                IconKey::Themed("cat-all", "folder"),
+                View::All,
+            ),
+            item(
+                // i18n: adjective: the downloads that are not complete yet
+                "Unfinished".into(),
+                IconKey::Themed("cat-unfinished", "folder_go"),
+                View::Unfinished(None),
+            ),
+            item(
+                // i18n: adjective: the downloads that are complete
+                "Finished".into(),
+                IconKey::Themed("cat-finished", "folder"),
+                View::Finished(None),
+            ),
+            // i18n: title of the side pane that lists the categories
+            heading("Categories"),
+        ];
+        for c in Category::named() {
+            rows.push(item(c.label(), category_icon(c), View::Cat(c)));
+        }
+        // i18n: plural noun: the download queues
+        rows.push(heading("Queues"));
+        for (q, queue) in self.queues.iter().enumerate() {
+            rows.push(item(
+                queue.name.clone().into(),
+                IconKey::Themed("cat-queues", "folder"),
+                View::Queue(q),
+            ));
+        }
+        // i18n: Liquid Glass's sidebar: the heading over Quarantine (downloads checked before they reach their folder)
+        rows.push(heading("Safety"));
+        let mut quarantine = item(
+            // i18n: Liquid Glass's sidebar: the downloads held in quarantine, checked before they reach their folder
+            "Quarantine".into(),
+            IconKey::Themed("cat-folder", "folder"),
+            View::Quarantine,
+        );
+        quarantine.0.shield = true;
+        rows.push(quarantine);
+        for (row, view, _) in &mut rows {
+            if let Some(v) = view {
                 let n = self.items.iter().filter(|i| self.in_view(*v, i)).count();
                 row.count = (n > 0).then_some(n);
             }
@@ -11986,7 +12092,32 @@ impl App {
         if winui::rtl() {
             toggle.0 = Icon::PreviewPaneLeft;
         }
-        match chrome::toolbar(ui, o, w, &tb, Some(toggle), tb_keys) {
+        let event = if crate::theme::mac_layout() {
+            // A Mac layout's toolbar: the view's name and count, then the buttons in groups:
+            // adding, running, deleting, the tools, the queues.
+            let (title, n) = self
+                .sidebar_rows()
+                .into_iter()
+                .find(|(row, view, _)| view.is_some() && row.selected)
+                .map(|(row, _, _)| (row.label.into_owned(), row.count.unwrap_or(0)))
+                .unwrap_or_else(|| (crate::i18n::t("All Downloads").to_owned(), 0));
+            let count = crate::i18n::tn(n as u64, "{n} download", "{n} downloads");
+            chrome::mac_toolbar(
+                ui,
+                o,
+                w,
+                &title,
+                &count,
+                &tb,
+                &[2, 3, 2, 2, 2],
+                Some(toggle),
+                tb_keys,
+            )
+        } else {
+            chrome::toolbar(ui, o, w, &tb, Some(toggle), tb_keys)
+        };
+        match event {
+            Some(ToolbarEvent::Search) => chosen = Some((Cmd::Find, None)),
             Some(ToolbarEvent::Click(k)) if k == buttons.len() => {
                 chosen = Some((Cmd::TogglePreview, None));
             }
@@ -12011,7 +12142,13 @@ impl App {
             let tree: Vec<TreeRow<'_>> = rows.iter().map(|(r, ..)| r.clone()).collect();
             // The splitter: the 4 px gap between the pane and the list, dragged sideways.
             let max_w = (w * 0.6).max(100.0);
-            let cat_w = (self.settings.categories_width as f32).clamp(100.0, max_w);
+            // A Mac layout's sidebar is wider than IDM's pane: its rows carry counts.
+            let least: f32 = if crate::theme::mac_layout() {
+                210.0
+            } else {
+                100.0
+            };
+            let cat_w = (self.settings.categories_width as f32).clamp(least.min(max_w), max_w);
             let right = o.x + 6.0 + cat_w;
             let split = winui::rect(egui::Rect::from_min_max(
                 pos2(right, o.y + chrome::menu_h() + chrome::pane_top()),
@@ -12076,7 +12213,13 @@ impl App {
                     tree_event = Some(TreeEvent::Toggle(at));
                 }
             }
-            if let Some(ev) = chrome::categories(
+            let draw = if crate::theme::current().controls.tree == crate::palette::TreeLook::Sidebar
+            {
+                chrome::sidebar
+            } else {
+                chrome::categories
+            };
+            if let Some(ev) = draw(
                 ui,
                 &mut self.icons,
                 o,
@@ -14955,6 +15098,12 @@ impl eframe::App for App {
     }
 
     fn ui(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
+        // A Mac layout's columns, once: the first time Liquid Glass is the look.
+        if crate::theme::mac_layout() && !self.settings.mac_columns_set {
+            self.list.mac_columns();
+            self.settings.mac_columns_set = true;
+            self.dirty = true;
+        }
         self.paint_frame(ui, frame);
     }
 }

@@ -2018,6 +2018,8 @@ pub enum ToolbarEvent {
     /// The toolbar takes the keys at this button: the arrows, Home or End moved them there, or
     /// a screen reader moved its focus there (#1190).
     Keys(usize),
+    /// A Mac layout's search field was clicked: Find opens.
+    Search,
 }
 
 /// Paint the etch (y 20, 21) and the toolbar band (y 22–91).
@@ -2358,6 +2360,271 @@ pub fn toolbar(
     event
 }
 
+/// A Mac layout's toolbar (Liquid Glass, as its design): the view's `title` and its `count`
+/// line at the leading edge, then the buttons as icons in capsules of glass, `groups` of them
+/// (each group the number of buttons it holds, in order), their labels shown on hover; the
+/// toggle and a search field (it opens Find) at the trailing end. The same events, keys and
+/// screen-reader names as [`toolbar`].
+#[allow(clippy::too_many_arguments)]
+pub fn mac_toolbar(
+    ui: &mut Ui,
+    o: Pos2,
+    width: f32,
+    title: &str,
+    count: &str,
+    buttons: &[(Icon, &str, bool)],
+    groups: &[usize],
+    toggle: Option<(Icon, &str, bool)>,
+    keys: Option<usize>,
+) -> Option<ToolbarEvent> {
+    let all: Vec<(Icon, &str, bool, Option<bool>)> = buttons
+        .iter()
+        .map(|(i, l, e)| (*i, *l, *e, None))
+        .chain(toggle.map(|(i, l, on)| (i, l, true, Some(on))))
+        .collect();
+    let p = ui.painter().clone();
+    let c = crate::theme::colors();
+    let top = o.y + menu_h();
+    let band = Rect::from_min_size(pos2(o.x, top + 2.0), vec2(width, 68.0));
+    if !crate::theme::glass() {
+        p.rect_filled(winui::rect(band), 0.0, WINDOW_BG());
+    }
+    let mid = band.center().y;
+    let is_dropdown =
+        |icon: &Icon| matches!(icon, Icon::StartQueue | Icon::StopQueue | Icon::AddTorrent);
+    let (bw, drop_w, cap_h, gap) = (36.0f32, 14.0f32, 34.0f32, 10.0f32);
+    let mut event = None;
+    let bar = ui.interact(
+        winui::rect(band),
+        egui::Id::unique("toolbar"),
+        egui::Sense::hover(),
+    );
+    winui::expose(
+        &bar,
+        egui::Role::Toolbar,
+        crate::i18n::tc("menu", "Toolbar"),
+        true,
+        None,
+    );
+    ui.ctx()
+        .accesskit_node_builder(bar.id, |n| n.set_author_id("toolbar"));
+    if winui::focus_target(ui.ctx(), bar.id) {
+        event = Some(ToolbarEvent::Keys(keys.unwrap_or(0)));
+    }
+    let bar_ui = ui.new_child(egui::UiBuilder::new().accessibility_parent(bar.id));
+    let keys = keys.map(|k| k.min(all.len().saturating_sub(1)));
+
+    // The title: the view's name, large, its count under it.
+    let title_font = egui::FontId::proportional(crate::theme::font_size(17.0));
+    let small = egui::FontId::proportional(crate::theme::font_size(11.5));
+    let lead = o.x + 18.0;
+    let title_w = text_width_font(&p, title_font.clone(), title)
+        .max(text_width_font(&p, small.clone(), count))
+        .min(220.0);
+    let shown = winui::ellipsize(&p, &title_font, title, title_w);
+    text_font(&p, title_font, lead, mid + 1.0, &shown, TEXT());
+    text_font(&p, small, lead, mid + 17.0, count, winui::MUTED());
+
+    // The groups' widths, and the trailing part's (toggle, search field).
+    let width_of = |i: usize| bw + if is_dropdown(&all[i].0) { drop_w } else { 0.0 };
+    let n_buttons = buttons.len();
+    let mut spans: Vec<std::ops::Range<usize>> = Vec::new();
+    let mut at = 0;
+    for g in groups {
+        let end = (at + g).min(n_buttons);
+        if end > at {
+            spans.push(at..end);
+        }
+        at = end;
+    }
+    if at < n_buttons {
+        spans.push(at..n_buttons);
+    }
+    let trail = o.x + width - 14.0;
+    let search_w = (width
+        - (lead - o.x)
+        - title_w
+        - 40.0
+        - spans
+            .iter()
+            .map(|g| g.clone().map(width_of).sum::<f32>() + 8.0 + gap)
+            .sum::<f32>()
+        - if toggle.is_some() {
+            bw + 8.0 + gap
+        } else {
+            0.0
+        })
+    .clamp(0.0, 220.0);
+    let search_w = if search_w < 120.0 { 0.0 } else { search_w };
+
+    // A capsule of glass behind a group.
+    let capsule = |l: f32, r: f32| {
+        let rc = winui::rect(Rect::from_min_max(
+            pos2(l, mid - cap_h / 2.0),
+            pos2(r, mid + cap_h / 2.0),
+        ));
+        p.rect_filled(
+            rc,
+            cap_h / 2.0,
+            crate::theme::glassy(c.toolbar_hot_faint, 0.9),
+        );
+        p.rect_stroke(
+            rc,
+            cap_h / 2.0,
+            egui::Stroke::new(1.0, CAT_FRAME().gamma_multiply(0.45)),
+            egui::StrokeKind::Inside,
+        );
+    };
+
+    // Search field and toggle at the trailing end; the groups after the title.
+    let mut right = trail;
+    if search_w > 0.0 {
+        let rc = Rect::from_min_max(
+            pos2(right - search_w, mid - cap_h / 2.0),
+            pos2(right, mid + cap_h / 2.0),
+        );
+        capsule(rc.left(), rc.right());
+        let resp = bar_ui.interact(
+            winui::rect(rc),
+            egui::Id::unique("tb-search"),
+            winui::pointer_only(),
+        );
+        // i18n: placeholder of the toolbar's search field (it opens Find)
+        let hint = crate::i18n::t("Search downloads");
+        winui::expose(&resp, egui::Role::SearchInput, hint, true, None);
+        if resp.hovered() {
+            p.rect_filled(winui::rect(rc), cap_h / 2.0, c.toolbar_hot_faint);
+        }
+        magnifier(&p, pos2(rc.left() + 16.0, mid), winui::MUTED());
+        let f = egui::FontId::proportional(crate::theme::font_size(13.0));
+        let hint = winui::ellipsize(&p, &f, hint, search_w - 40.0);
+        text_font(&p, f, rc.left() + 30.0, mid + 5.0, &hint, winui::MUTED());
+        if resp.clicked() {
+            event = Some(ToolbarEvent::Search);
+        }
+        right = rc.left() - gap;
+    }
+    // Where each button starts.
+    let mut lefts = vec![0.0f32; all.len()];
+    if toggle.is_some() {
+        let i = all.len() - 1;
+        lefts[i] = right - bw - 4.0;
+        capsule(lefts[i] - 4.0, right);
+    }
+    let mut x = lead + title_w + 28.0;
+    for g in &spans {
+        let l = x;
+        x += 4.0;
+        for i in g.clone() {
+            lefts[i] = x;
+            x += width_of(i);
+        }
+        x += 4.0;
+        capsule(l, x);
+        x += gap;
+    }
+
+    for (i, (icon, label, enabled, on)) in all.iter().enumerate() {
+        let full = crate::i18n::tc("toolbar", label);
+        let dropdown = is_dropdown(icon);
+        let x = lefts[i];
+        let total = width_of(i);
+        let rc = Rect::from_min_size(pos2(x, mid - cap_h / 2.0 + 3.0), vec2(total, cap_h - 6.0));
+        let resp = bar_ui
+            .interact(
+                winui::rect(rc),
+                egui::Id::unique(("tb", i)),
+                winui::pointer_only(),
+            )
+            .on_hover_text(full);
+        winui::expose(&resp, egui::Role::Button, full, *enabled, None);
+        if let Some(on) = on {
+            use egui::accesskit::Toggled;
+            let state = if *on { Toggled::True } else { Toggled::False };
+            ui.ctx()
+                .accesskit_node_builder(resp.id, |n| n.set_toggled(state));
+        }
+        let drop_at = pos2(winui::mx(x), o.y + menu_h() + 60.0);
+        if dropdown {
+            use egui::accesskit::{Action, HasPopup};
+            ui.ctx().accesskit_node_builder(resp.id, |n| {
+                n.set_has_popup(HasPopup::Menu);
+                n.add_action(Action::Expand);
+                n.set_expanded(false);
+            });
+            if ui.input(|inp| inp.has_accesskit_action_request(resp.id, Action::Expand)) {
+                event = Some(ToolbarEvent::Drop(i, drop_at));
+            }
+        }
+        if winui::focus_target(ui.ctx(), resp.id) {
+            event = Some(ToolbarEvent::Keys(i));
+        }
+        let lit = if *on == Some(true) || (*enabled && resp.is_pointer_button_down_on()) {
+            Some(c.toolbar_pressed)
+        } else if *enabled && resp.hovered() {
+            Some(c.toolbar_hot)
+        } else {
+            None
+        };
+        if let Some(fill_c) = lit {
+            p.rect_filled(winui::rect(rc), rc.height() / 2.0, fill_c);
+        }
+        let icon_rect = Rect::from_center_size(pos2(x + bw / 2.0, mid), vec2(18.0, 18.0));
+        icon.image(*enabled).paint_at(ui, winui::rect(icon_rect));
+        if dropdown {
+            let ax = x + bw + 1.0;
+            for (row, half) in [2.0f32, 1.0, 0.0].iter().enumerate() {
+                winui::fill_l(
+                    &p,
+                    ax + 3.0 - half,
+                    mid - 1.0 + row as f32,
+                    ax + 3.0 + half,
+                    mid - 1.0 + row as f32,
+                    TB_ARROW(),
+                );
+            }
+        }
+        let on_arrow = dropdown
+            && resp
+                .interact_pointer_pos()
+                .is_some_and(|q| winui::mx(q.x) >= x + bw);
+        if resp.clicked() && (*enabled || on_arrow) {
+            event = Some(if on_arrow {
+                ToolbarEvent::Drop(i, drop_at)
+            } else {
+                ToolbarEvent::Click(i)
+            });
+        }
+        if keys == Some(i) {
+            winui::keys_with(ui.ctx(), resp.id);
+            winui::focus_ring(&p, winui::rect(rc.expand(1.0)));
+        }
+    }
+    if let Some(k) = keys
+        && event.is_none()
+    {
+        let enabled = all.get(k).is_some_and(|b| b.2);
+        let dropdown = all.get(k).is_some_and(|b| is_dropdown(&b.0));
+        let at = pos2(
+            winui::mx(lefts.get(k).copied().unwrap_or(o.x)),
+            o.y + menu_h() + 60.0,
+        );
+        event = ui.input_mut(|i| toolbar_keys(i, k, all.len(), enabled, dropdown, at));
+    }
+    event
+}
+
+/// A search field's magnifier: a ring and its handle, centred at `c`.
+fn magnifier(p: &egui::Painter, c: Pos2, ink: egui::Color32) {
+    let c = winui::rect(Rect::from_center_size(c, vec2(0.0, 0.0))).center();
+    let ring = c + vec2(-1.5, -1.5);
+    p.circle_stroke(ring, 5.0, egui::Stroke::new(1.5, ink));
+    p.line_segment(
+        [ring + vec2(3.6, 3.6), ring + vec2(7.0, 7.0)],
+        egui::Stroke::new(1.6, ink),
+    );
+}
+
 /// The toolbar's keys while button `k` of `n` has them ([`toolbar`]): what they do, the keys
 /// taken.
 fn toolbar_keys(
@@ -2456,6 +2723,10 @@ pub struct TreeRow<'a> {
     pub badge: Option<&'static str>,
     /// How many downloads the node holds, shown after its label (none when empty).
     pub count: Option<usize>,
+    /// A sidebar's section heading (Liquid Glass: "Library", "Categories"…): no icon, no view.
+    pub heading: bool,
+    /// Drawn with a shield (the sidebar's Quarantine) instead of `icon`.
+    pub shield: bool,
 }
 
 /// A tree node's count, after its label: "(7)".
@@ -2930,6 +3201,212 @@ pub fn categories(
     ui.ctx()
         .data_mut(|d| d.insert_temp(scroll_id, (vpos, hpos)));
     event
+}
+
+/// Liquid Glass's sidebar (`TreeLook::Sidebar`), as a Mac app's: an inset panel of glass with
+/// rounded corners, section headings in small grey type, and rows of 30 points (a 16 point icon,
+/// the label, the count at the trailing end) with a rounded band under the pointer and on the
+/// chosen one. The same events as [`categories`]; nothing to open or shut, no caption, no "x"
+/// (View → Hide categories still hides it).
+pub fn sidebar(
+    ui: &mut Ui,
+    icons: &mut ShellIcons,
+    o: Pos2,
+    bottom: f32,
+    right: f32,
+    rows: &[TreeRow<'_>],
+    keys: bool,
+) -> Option<TreeEvent> {
+    const ROW: f32 = 30.0;
+    let p = ui.painter().clone();
+    let c = crate::theme::colors();
+    let mut event = None;
+    let panel = Rect::from_min_max(
+        pos2(o.x + 8.0, o.y + pane_top() + menu_h() + 2.0),
+        pos2(right, bottom - 8.0),
+    );
+    let panel_rc = winui::rect(panel);
+    p.rect_filled(panel_rc, 12.0, crate::theme::glassy(TREE_BG(), 0.55));
+    p.rect_stroke(
+        panel_rc,
+        12.0,
+        Stroke::new(1.0, CAT_FRAME().gamma_multiply(0.7)),
+        egui::StrokeKind::Inside,
+    );
+    let area = panel.shrink2(vec2(0.0, 8.0));
+    let page = (area.height() / ROW).floor().max(1.0);
+    let scroll_id = egui::Id::unique("sidebar-scroll");
+    let mut first = ui
+        .ctx()
+        .data(|d| d.get_temp::<f32>(scroll_id))
+        .unwrap_or_default();
+    if ui.rect_contains_pointer(panel_rc) {
+        first += winui::wheel_rows(ui, ROW, page);
+    }
+    first = first
+        .clamp(0.0, (rows.len() as f32 - page).max(0.0))
+        .round();
+    ui.ctx().data_mut(|d| d.insert_temp(scroll_id, first));
+    let tp = p.with_clip_rect(winui::rect(area));
+    let blank = ui.interact(
+        panel_rc,
+        egui::Id::unique("tree-blank"),
+        winui::pointer_only(),
+    );
+    winui::expose(
+        &blank,
+        egui::Role::Tree,
+        crate::i18n::t("Categories"),
+        true,
+        None,
+    );
+    ui.ctx()
+        .accesskit_node_builder(blank.id, |n| n.set_author_id("categories"));
+    if winui::focus_target(ui.ctx(), blank.id) {
+        event = Some(TreeEvent::Keys(None));
+    }
+    let mut keys_item = blank.id;
+    let rows_ui = ui.new_child(egui::UiBuilder::new().accessibility_parent(blank.id));
+    let mut selected_at = None;
+    let label_font = egui::FontId::proportional(crate::theme::font_size(13.0));
+    let head_font = egui::FontId::proportional(crate::theme::font_size(11.0));
+    for (k, r) in rows.iter().enumerate() {
+        let top = area.top() + ROW * (k as f32 - first);
+        if top < area.top() - 0.5 || top + ROW > area.bottom() + 0.5 {
+            continue;
+        }
+        let label = crate::i18n::t(&r.label);
+        if r.heading {
+            text_font(
+                &tp,
+                head_font.clone(),
+                panel.left() + 14.0,
+                top + ROW - 8.0,
+                label,
+                winui::MUTED(),
+            );
+            continue;
+        }
+        let band = Rect::from_min_max(
+            pos2(panel.left() + 6.0, top + 2.0),
+            pos2(panel.right() - 6.0, top + ROW - 2.0),
+        );
+        let resp = rows_ui.interact(
+            winui::rect(band),
+            egui::Id::unique(("tree-row", k)),
+            winui::pointer_only(),
+        );
+        if r.selected {
+            tp.rect_filled(winui::rect(band), 8.0, c.toolbar_pressed);
+        } else if resp.hovered() {
+            tp.rect_filled(winui::rect(band), 8.0, c.toolbar_hot_faint);
+        }
+        let icon_at = pos2(panel.left() + 16.0, top + (ROW - 16.0) / 2.0);
+        if r.shield {
+            shield(
+                &tp,
+                winui::rect(Rect::from_min_size(icon_at, vec2(16.0, 16.0))),
+            );
+        } else {
+            icons.paint_in(ui, &tp, r.icon.clone(), icon_at);
+        }
+        let baseline = top + ROW / 2.0 + 4.5;
+        let text_x = panel.left() + 42.0;
+        let count = r.count.map(|n| crate::i18n::integer(n as u64));
+        let count_w = count
+            .as_deref()
+            .map_or(0.0, |n| text_width_font(&p, label_font.clone(), n) + 8.0);
+        let room = band.right() - 10.0 - count_w - text_x;
+        let shown = winui::ellipsize(&p, &label_font, label, room);
+        text_font(&tp, label_font.clone(), text_x, baseline, &shown, TEXT());
+        if let Some(n) = &count {
+            let w = text_width_font(&p, label_font.clone(), n);
+            text_font(
+                &tp,
+                label_font.clone(),
+                band.right() - 10.0 - w,
+                baseline,
+                n,
+                winui::MUTED(),
+            );
+        }
+        if keys && r.selected {
+            winui::focus_ring_round(&tp, winui::rect(band), 8.0);
+        }
+        let name = match &count {
+            Some(n) => format!("{label} ({n})"),
+            None => label.to_owned(),
+        };
+        winui::expose(&resp, egui::Role::TreeItem, &name, true, None);
+        let selected = r.selected;
+        ui.ctx().accesskit_node_builder(resp.id, |n| {
+            n.set_selected(selected);
+            n.set_level(1);
+            n.add_action(egui::accesskit::Action::ShowContextMenu);
+        });
+        let menu = ui.input(|i| {
+            i.has_accesskit_action_request(resp.id, egui::accesskit::Action::ShowContextMenu)
+        });
+        let under = band.left_bottom() + vec2(24.0, 0.0);
+        if r.selected {
+            selected_at = Some((k, under));
+            keys_item = resp.id;
+        }
+        if winui::focus_target(ui.ctx(), resp.id) {
+            event = Some(TreeEvent::Keys(Some(k)));
+        }
+        if menu {
+            event = Some(TreeEvent::Context(k, under));
+            ui.ctx().request_repaint();
+        }
+        if resp.clicked() {
+            event = Some(TreeEvent::Select(k));
+        }
+        if resp.secondary_clicked()
+            && let Some(at) = resp.interact_pointer_pos()
+        {
+            event = Some(TreeEvent::Context(k, at));
+        }
+    }
+    if keys {
+        winui::keys_with(ui.ctx(), keys_item);
+        if let Some((k, at)) = selected_at
+            && ui.input_mut(|i| {
+                i.consume_key(egui::Modifiers::SHIFT, egui::Key::F10)
+                    || i.consume_key(egui::Modifiers::NONE, egui::Key::Menu)
+            })
+        {
+            event = Some(TreeEvent::Context(k, at));
+        }
+    }
+    // The chosen row kept in view as the keys move it.
+    if let Some(s) = rows.iter().position(|r| r.selected).map(|s| s as f32)
+        && (s < first || s >= first + page)
+        && keys
+    {
+        let to = if s < first { s } else { s - page + 1.0 };
+        ui.ctx().data_mut(|d| d.insert_temp(scroll_id, to));
+        ui.ctx().request_repaint();
+    }
+    event
+}
+
+/// Lucide's shield (ISC), stroked in the Liquid Glass set's orange: the sidebar's Quarantine.
+fn shield(p: &egui::Painter, rc: Rect) {
+    let k = rc.width() / 24.0;
+    let at = |x: f32, y: f32| pos2(rc.left() + x * k, rc.top() + y * k);
+    let pts = vec![
+        at(12.0, 2.6),
+        at(19.5, 5.3),
+        at(19.5, 12.5),
+        at(17.6, 17.2),
+        at(12.0, 21.5),
+        at(6.4, 17.2),
+        at(4.5, 12.5),
+        at(4.5, 5.3),
+    ];
+    let ink = Color32::from_rgb(0xe0, 0x7a, 0x1f);
+    p.add(egui::Shape::closed_line(pts, Stroke::new(2.0 * k, ink)));
 }
 
 /// Light mode's classic 9×9 +/- box at x 15..23, y top+4..top+12 (light-main.md grids).
@@ -4009,6 +4486,8 @@ mod tests {
             icon: IconKey::Silk("folder"),
             badge: None,
             count: None,
+            heading: false,
+            shield: false,
         };
         let rows = [
             row("All", 0, false),

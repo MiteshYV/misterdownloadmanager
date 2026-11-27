@@ -13,7 +13,7 @@ icon-set = "liquid-glass"
 [controls]
 field-focus = "ring"
 check = "adwaita"
-button = "fluent"
+button = "glass"
 progress = "line"
 scroll = "overlay"
 caption = "system"
@@ -35,8 +35,8 @@ radius = 10
 border = 1
 "focus-line" = 2
 "font.ui" = 13
-"list.row" = 24
-"list.header" = 26
+"list.row" = 46
+"list.header" = 30
 
 [seeds.light]
 background = "#eef1f6"

@@ -421,6 +421,21 @@ impl ListState {
         self.visible[0] = true;
     }
 
+    /// A Mac layout's columns (Liquid Glass, as its design): the name, wide, then Size, Status,
+    /// Transfer rate and Time left; the others stay one right-click away.
+    pub fn mac_columns(&mut self) {
+        let lead = [0, 2, 3, 5, 4];
+        let mut order: Vec<usize> = lead.to_vec();
+        order.extend((0..COLS).filter(|c| !lead.contains(c)));
+        let mut visible = [false; COLS];
+        for c in lead {
+            visible[c] = true;
+        }
+        self.set_columns(order, visible);
+        self.widths[0] = self.widths[0].max(250.0);
+        self.widths[RATE] = self.widths[RATE].max(100.0);
+    }
+
     /// Visible columns in display order.
     fn shown(&self) -> Vec<usize> {
         self.order
@@ -450,6 +465,9 @@ pub struct Row {
     /// From a private (incognito) window (#1581): the Status cell starts with a mask, and its
     /// tip, and what a screen reader says of the row, with this (whether the list keeps it).
     pub private: Option<String>,
+    /// The download's category, under its name in a Mac layout's two-line row
+    /// ([`crate::theme::mac_layout`]).
+    pub kind: String,
 }
 
 #[derive(Default)]
@@ -640,9 +658,29 @@ pub fn show(
         outer.right() - 1.0,
         outer.bottom() - 1.0,
     );
-    winui::solid(&p, screen(outer), FRAME());
-    fill(&p, l + 1.0, t + 1.0, r - 1.0, b - 1.0, BG());
-    let (cl, ct, cr, cb) = (l + 2.0, t + 2.0, r - 2.0, b - 2.0);
+    // A Mac layout (Liquid Glass): the list is a card of glass with round corners, its rows
+    // inset from its edge; otherwise Windows' list view, framed and square.
+    let mac = crate::theme::mac_layout();
+    let inset = if mac {
+        p.rect_filled(screen(outer), 12.0, crate::theme::glassy(BG(), 0.6));
+        p.rect_stroke(
+            screen(outer),
+            12.0,
+            egui::Stroke::new(1.0, FRAME().gamma_multiply(0.6)),
+            egui::StrokeKind::Inside,
+        );
+        8.0
+    } else {
+        winui::solid(&p, screen(outer), FRAME());
+        fill(&p, l + 1.0, t + 1.0, r - 1.0, b - 1.0, BG());
+        2.0
+    };
+    let (cl, ct, cr, cb) = (
+        l + inset,
+        t + inset - if mac { 4.0 } else { 0.0 },
+        r - inset,
+        b - inset,
+    );
     let font = winui::tahoma();
     // Status at its default width follows the font and the language (#736): a few words to
     // measure, kept by egui from frame to frame.
@@ -811,8 +849,20 @@ pub fn show(
     let cols = spans(st);
     let p_all = p.clone();
     let p = p.with_clip_rect(screen(header));
-    fill(&p, cl, ct, rr, ct + header_h() - 1.0, HEADER_BG());
-    winui::header_shade(&p, cl, rr, ct + header_h() - 1.0, false);
+    if !mac {
+        fill(&p, cl, ct, rr, ct + header_h() - 1.0, HEADER_BG());
+        winui::header_shade(&p, cl, rr, ct + header_h() - 1.0, false);
+    } else {
+        // A Mac list's header: its titles over a hairline, no face of its own.
+        fill(
+            &p,
+            cl,
+            ct + header_h() - 1.0,
+            rr,
+            ct + header_h() - 1.0,
+            GRID_H(),
+        );
+    }
     for (c, x0, x1) in &cols {
         let hovered = hresp
             .hover_pos()
@@ -854,7 +904,9 @@ pub fn show(
         if state != winui::State::Normal || st.sort.is_some_and(|(sc, _)| sc == *c) {
             winui::header_shade(&p, *x0, x1 - 1.0, ct + header_h() - 1.0, hovered);
         }
-        winui::header_divider(&p, *x1, ct, ct + header_h() - 1.0, HEADER_SEP());
+        if !mac {
+            winui::header_divider(&p, *x1, ct, ct + header_h() - 1.0, HEADER_SEP());
+        }
         let mut arrow_room = if st.sort.is_some_and(|(sc, _)| sc == *c) {
             14.0
         } else {
@@ -865,7 +917,8 @@ pub fn show(
         // and the funnel (Q) shows it only under the pointer.
         let filtered = st.filters[*c].is_some();
         let open = st.filter_open.is_some_and(|(fc, _)| fc == *c);
-        let roomy = x1 - x0 >= 44.0;
+        // A Mac layout shows a funnel only under the pointer, open or filtering.
+        let roomy = x1 - x0 >= 44.0 && !mac;
         if roomy || filtered || hovered || open {
             let fr = funnel_rect(st, *c, *x0, *x1, ct);
             let color = if filtered {
@@ -901,7 +954,12 @@ pub fn show(
             *x0..=*x1,
             ct..=ct + header_h(),
         )));
-        text_font(&clip, font.clone(), x0 + 6.0, ct + 15.0, &label, TEXT());
+        let (ink, baseline) = if mac {
+            (winui::MUTED(), ct + header_h() / 2.0 + 4.0)
+        } else {
+            (TEXT(), ct + 15.0)
+        };
+        text_font(&clip, font.clone(), x0 + 6.0, baseline, &label, ink);
     }
 
     // ---- body ------------------------------------------------------------------------------
@@ -1078,7 +1136,17 @@ pub fn show(
                 // The row above its grid line; the focused row has a dotted outline (every other
                 // pixel), in the fill's inverse on a selected row. Both modes alike.
                 let (right, bottom) = (last_right - 1.0, top + row_h() - 2.0);
-                if sel {
+                if sel && mac {
+                    // A Mac list's selection: a rounded band, the accent faint.
+                    bp.rect_filled(
+                        screen(Rect::from_min_max(
+                            pos2(cl, top + 2.0),
+                            pos2(rr, top + row_h() - 2.0),
+                        )),
+                        8.0,
+                        crate::theme::colors().toolbar_pressed,
+                    );
+                } else if sel {
                     fill(&bp, cl, top, right, bottom, SELECTED());
                 }
                 if has_focus {
@@ -1089,6 +1157,15 @@ pub fn show(
                     };
                     dotted(&bp, cl, top, right, bottom, dot);
                 }
+            } else if picked && mac {
+                bp.rect_filled(
+                    screen(Rect::from_min_max(
+                        pos2(cl, top + 2.0),
+                        pos2(rr, top + row_h() - 2.0),
+                    )),
+                    8.0,
+                    crate::theme::colors().toolbar_hot_faint,
+                );
             } else if picked {
                 // Unfocused (Find, Properties, a menu has the keys): still shown, in the inactive
                 // selection grey, as Explorer shows it, so what a command acts on stays visible.
@@ -1104,7 +1181,39 @@ pub fn show(
             }
             for (c, x0, x1) in &cols {
                 // The file-type icon sits in the File Name column, wherever it is.
-                let tx = if *c == 0 {
+                let tx = if *c == 0 && mac {
+                    // A Mac list's file: its icon on a soft tile, the name, its category under
+                    // it (drawn here; the cell's text below is skipped).
+                    let tile = Rect::from_min_size(
+                        pos2(x0 + 6.0, top + (row_h() - 30.0) / 2.0),
+                        egui::vec2(30.0, 30.0),
+                    );
+                    bp.rect_filled(screen(tile), 8.0, crate::theme::colors().toolbar_hot_faint);
+                    icons.paint_in(
+                        ui,
+                        &bp,
+                        row.icon.clone(),
+                        tile.center() - egui::vec2(8.0, 8.0),
+                    );
+                    let tx = x0 + 46.0;
+                    let cell = Rect::from_min_max(pos2(*x0, top), pos2(*x1 - 1.0, top + row_h()));
+                    let clip = bp.with_clip_rect(screen(cell.intersect(body)));
+                    let name = winui::ellipsize(&bp, &font, &row.cells[0], x1 - tx - 3.0);
+                    let mid = top + row_h() / 2.0;
+                    text_font(&clip, font.clone(), tx, mid - 2.0, &name, TEXT());
+                    let small = egui::FontId::new(font.size - 1.5, font.family.clone());
+                    let kind = winui::ellipsize(&bp, &small, &row.kind, x1 - tx - 3.0);
+                    text_font(&clip, small, tx, mid + 13.0, &kind, winui::MUTED());
+                    if name != row.cells[0]
+                        && resp
+                            .hover_pos()
+                            .map(english)
+                            .is_some_and(|h| cell.contains(h))
+                    {
+                        cut_under_pointer = Some(row.cells[0].clone());
+                    }
+                    continue;
+                } else if *c == 0 {
                     icons.paint_in(ui, &bp, row.icon.clone(), pos2(x0 + 4.0, top + row_slack()));
                     x0 + 22.0
                 } else if *c == STATUS && row.private.is_some() {
@@ -1185,7 +1294,7 @@ pub fn show(
                 let clip = bp.with_clip_rect(screen(cell.intersect(body)));
                 // A failed download's Status and Description (the reason) in the error colour.
                 let failed = row.status_group == "Error" && (*c == 3 || *c == 7);
-                let ink = if sel {
+                let ink = if sel && !mac {
                     winui::SELECTION_TEXT()
                 } else if failed {
                     winui::ERROR()
@@ -1215,7 +1324,7 @@ pub fn show(
         // both modes (dark changes only colours).
         let gy = top + row_h() - 1.0;
         // An empty list has no grid (the empty state stands alone).
-        if !rows.is_empty() {
+        if !rows.is_empty() && !mac {
             fill(&bp, cl, gy, rr, gy, GRID_H());
         }
     }
@@ -1236,7 +1345,7 @@ pub fn show(
         resp.clone().on_hover_text_at_pointer(full);
     }
     filter_box(ui, st);
-    for (_, _, x1) in cols.iter().filter(|_| !rows.is_empty()) {
+    for (_, _, x1) in cols.iter().filter(|_| !rows.is_empty() && !mac) {
         // On the column's last pixel, under its header's divider: one straight line from the
         // header down (#924: it sat a pixel to the right, on the next column's first).
         fill(&bp, *x1, body_top, *x1, rb, GRID_V_RIGHT());
@@ -2046,6 +2155,7 @@ mod tests {
             private: None,
             rate_tip: None,
             progress: None,
+            kind: String::new(),
         }
     }
 
@@ -2332,6 +2442,7 @@ mod tests {
                 private: None,
                 rate_tip: None,
                 progress: None,
+                kind: String::new(),
             })
             .collect();
         let mut icons = ShellIcons;

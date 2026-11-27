@@ -2180,7 +2180,7 @@ impl Shine {
     fn of_button(look: crate::palette::ButtonLook) -> Option<Self> {
         use crate::palette::ButtonLook as B;
         match look {
-            B::Fluent | B::Breeze => None,
+            B::Fluent | B::Breeze | B::Glass => None,
             B::Luna => Some(Shine::Luna),
             B::Aero => Some(Shine::Aero),
             B::Aqua => Some(Shine::Aqua),
@@ -4458,8 +4458,8 @@ fn paint_button(
         _ if part => control_radius().min((rc.height() / 3.0).floor()),
         ButtonLook::Fluent | ButtonLook::Breeze => control_radius(),
         ButtonLook::Luna | ButtonLook::Aero => m.button_radius,
-        // Mac OS X's push buttons are round at the ends.
-        ButtonLook::Aqua => (rc.height() / 2.0).floor(),
+        // Mac OS X's push buttons, and macOS 26's, are round at the ends.
+        ButtonLook::Aqua | ButtonLook::Glass => (rc.height() / 2.0).floor(),
     };
     let Some(shine) = Shine::of_button(look) else {
         p.rect_filled(rc, radius, face.fill);
@@ -4470,8 +4470,8 @@ fn paint_button(
             StrokeKind::Inside,
         );
         // The bottom edge: a push button's and a drop-down's 3 points in from its ends, a small
-        // part's from its corners (none on one too low for it).
-        if shape != Shape::Small || rc.height() >= 14.0 {
+        // part's from its corners (none on one too low for it). Liquid Glass has none.
+        if look != ButtonLook::Glass && (shape != Shape::Small || rc.height() >= 14.0) {
             let inset = if shape == Shape::Small { radius } else { 3.0 };
             hline(
                 p,
@@ -4549,6 +4549,10 @@ fn button_colors_in(
     look: crate::palette::ButtonLook,
 ) -> Face {
     let pressed = state == State::Pressed;
+    // macOS 26: the default button is the accent, filled, no edge of its own.
+    if look == crate::palette::ButtonLook::Glass && kind == ButtonKind::Default {
+        return button_colors_in(ButtonKind::Accent, state, c, look);
+    }
     // Mac OS X: the default button is the accent's gel, its edge a shade darker.
     if look == crate::palette::ButtonLook::Aqua && kind == ButtonKind::Default {
         let face = button_colors_in(ButtonKind::Accent, state, c, look);

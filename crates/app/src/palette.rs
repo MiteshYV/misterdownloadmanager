@@ -537,6 +537,9 @@ pub enum ButtonLook {
     Aero,
     /// Mac OS X: a gel face, round at the ends, the default button in the accent's gel.
     Aqua,
+    /// macOS 26 (Liquid Glass): a capsule, a flat face with a hairline edge and no bottom line,
+    /// the default button filled with the accent.
+    Glass,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -643,6 +646,7 @@ impl Controls {
             ("check", "aero") => self.check = CheckLook::Aero,
             ("check", "aqua") => self.check = CheckLook::Aqua,
             ("button", "fluent") => self.button = ButtonLook::Fluent,
+            ("button", "glass") => self.button = ButtonLook::Glass,
             ("button", "breeze") => self.button = ButtonLook::Breeze,
             ("button", "luna") => self.button = ButtonLook::Luna,
             ("button", "aero") => self.button = ButtonLook::Aero,

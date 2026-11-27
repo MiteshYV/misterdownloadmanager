@@ -3172,6 +3172,12 @@ pub fn glass() -> bool {
     GLASS.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+/// Whether the theme lays the main window out as a Mac app (Liquid Glass): a sidebar of
+/// sections, the list a card with tall rows, no grid. Its tree's look says so.
+pub fn mac_layout() -> bool {
+    current().controls.tree == crate::palette::TreeLook::Sidebar
+}
+
 /// Whether the theme `id` (a built-in's, as the settings name it) asks for glass behind the main
 /// window. Read before the window is made, when the theme isn't chosen yet: a window is see-through
 /// only if it was made so.

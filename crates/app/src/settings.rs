@@ -596,6 +596,9 @@ pub struct Settings {
     pub quarantine_torrents: bool,
     /// ... and every other download too (a file from the web). Off.
     pub quarantine_all: bool,
+    /// The list's columns were set once to a Mac layout's (Liquid Glass: Name, Size, Status,
+    /// Transfer rate, Time left), the first time that look was used; changed by hand after.
+    pub mac_columns_set: bool,
     /// ... up to this many GB (a test reads the whole file): a larger one is tested only with
     /// right-click → Test archive. 4.
     pub test_archives_gb: u32,
@@ -798,6 +801,7 @@ impl Default for Settings {
             test_archives: true,
             quarantine_torrents: true,
             quarantine_all: false,
+            mac_columns_set: false,
             test_archives_gb: 4,
             grabber_check: true,
             grabber_hide_pages: true,

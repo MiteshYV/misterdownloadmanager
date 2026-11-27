@@ -15,6 +15,8 @@ const lang = ext.i18n.getUILanguage();
 const query = new URLSearchParams(location.search);
 
 document.documentElement.lang = lang;
+// On a Mac, the Mac app's Liquid Glass look (popup.css, html.mac); elsewhere Windows 11's.
+if (/Mac/i.test(navigator.userAgentData?.platform || navigator.platform || "")) document.documentElement.classList.add("mac");
 document.documentElement.dir = t("@@bidi_dir") === "rtl" ? "rtl" : "ltr";
 for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = t(el.dataset.i18n);
 for (const el of document.querySelectorAll("[data-i18n-placeholder]")) el.placeholder = t(el.dataset.i18nPlaceholder);

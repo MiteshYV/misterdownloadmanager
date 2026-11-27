@@ -1398,15 +1398,63 @@ button:focus-visible { outline: none; }
   .spin, .chip.skel, .menu .skrow { animation: none; }
 }
 `;
+  // On a Mac, the Mac app's Liquid Glass look over the same parts: frosted glass, the system's blue
+  // for the action, a capsule with round buttons, rounded menu rows and the system's font. The
+  // states keep their meaning in the Mac's own colours. Other systems keep the look above.
+  const nav = globalThis.navigator;
+  const MAC = /Mac/i.test(nav?.userAgentData?.platform || nav?.platform || "");
+  const MAC_CSS = `
+.pill, .menu, .tip, .guide {
+  --go: #007aff; --go-hi: #0a6fe6; --go-ink: #ffffff; --stamp: #0a64d8; --accent: #0a64d8;
+  --ok: #248a3d; --warn: #b25000; --err: #d70015;
+  --bg: rgba(247, 247, 250, .88); --bg2: rgba(247, 247, 250, .88); --bd: rgba(0, 0, 0, .1);
+  --tx: #1d1d1f; --tx2: #6e6e73; --hov: rgba(0, 0, 0, .06);
+  --sh: inset 0 .5px 0 rgba(255, 255, 255, .7), 0 1px 3px rgba(0, 0, 0, .12), 0 10px 28px rgba(0, 0, 0, .18);
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+  -webkit-backdrop-filter: blur(32px) saturate(160%); backdrop-filter: blur(32px) saturate(160%);
+}
+@media (prefers-color-scheme: dark) {
+  .pill, .menu, .tip, .guide {
+    --go: #0a84ff; --go-hi: #3395ff; --accent: #4da3ff; --ok: #30d158; --warn: #ffb340; --err: #ff6961;
+    --bg: rgba(38, 38, 42, .86); --bg2: rgba(38, 38, 42, .86); --bd: rgba(255, 255, 255, .14);
+    --tx: #f5f5f7; --tx2: #a1a1a6; --hov: rgba(255, 255, 255, .1);
+    --sh: inset 0 .5px 0 rgba(255, 255, 255, .14), 0 1px 3px rgba(0, 0, 0, .3), 0 10px 28px rgba(0, 0, 0, .4);
+  }
+}
+.guide { -webkit-backdrop-filter: none; backdrop-filter: none; }
+.pill { height: 34px; padding: 3px; gap: 2px; border-radius: 17px; background: var(--bg); border: .5px solid var(--bd); font-size: 12.5px; }
+.go { border-radius: 14px; padding-inline: 8px 12px; }
+.pill:not(.bare) .go { box-shadow: none; }
+.pill:not(.bare) .go .label { font-weight: 600; }
+.more, .x { width: 28px; border: 0; border-radius: 50%; background: transparent; }
+.more svg, .x svg { width: 11px; height: 11px; }
+.chip { font-weight: 600; color: var(--go-ink); background: rgba(255, 255, 255, .24); border-radius: 8px; padding: 0 6px; }
+.spin { border-color: rgba(255, 255, 255, .35); border-top-color: #fff; }
+.pill:has(button:focus-visible) { outline: 3px solid color-mix(in srgb, var(--go) 55%, transparent); outline-offset: 1px; }
+.more:focus-visible, .x:focus-visible, .act:focus-visible { box-shadow: 0 0 0 2px var(--go) inset; }
+.act { border-radius: 10px; padding: 5px 8px; }
+.pill.dragging { box-shadow: 0 6px 14px rgba(0, 0, 0, .22), 0 18px 40px rgba(0, 0, 0, .28); }
+.tip { top: 40px; border-radius: 10px; padding: 7px 10px; background: var(--bg); border: .5px solid var(--bd); }
+.menu { width: 330px; padding: 6px; border-radius: 14px; background: var(--bg); border: .5px solid var(--bd); font-size: 12.5px; }
+.menu button { height: 30px; border-radius: 8px; padding-inline: 9px; }
+.menu button.sel::before { display: none; }
+.menu button.sel { background: color-mix(in srgb, var(--go) 16%, transparent); }
+.menu .best { border-radius: 6px; }
+.menu .fc { border: .5px solid var(--bd); border-radius: 11px; background: transparent; }
+.menu .fc[aria-checked="true"] { border-color: transparent; background: var(--go); color: #fff; }
+.hr { background: var(--bd); margin: 5px 4px; }
+.cap { text-transform: none; letter-spacing: 0; font-size: 11px; }
+.snap { border-color: #fff; background: var(--go); }
+`;
   // A constructed sheet: a page whose Content-Security-Policy refuses inline styles can't strip
   // it (Firefox applies the page's policy to what a content script adds).
   try {
     const sheet = new CSSStyleSheet();
-    sheet.replaceSync(CSS);
+    sheet.replaceSync(MAC ? CSS + MAC_CSS : CSS);
     shadow.adoptedStyleSheets = [sheet];
   } catch {
     const style = document.createElement("style");
-    style.textContent = CSS;
+    style.textContent = MAC ? CSS + MAC_CSS : CSS;
     shadow.appendChild(style);
   }
   // Its markup, fixed (the words go in as text): the tab, its tip, the drag's guide, its list.

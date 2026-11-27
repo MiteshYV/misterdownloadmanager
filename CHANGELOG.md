@@ -9,6 +9,8 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 - **The Mac installer window looks like a Mac installer**: opening the `.dmg` shows a window of a fixed size with no toolbar or sidebar, the app on the left, an arrow, and Applications on the right, at full icon size over a Liquid Glass background, with the app's icon on the disk. Drag the app onto Applications to install it.
 
+- **The browser add-on on a Mac looks like the Mac app**: the download button over videos is a frosted glass capsule in the Mac's blue, with round buttons and a glass menu of rounded rows; the toolbar popup has soft glass surfaces, a segmented control for its tabs, capsule buttons, the Mac's switches and focus ring, and the system's font, in light and dark. Windows and Linux keep their look. It comes with this release's `-extension-chromium.zip` (load it unpacked): the Chrome Web Store's copy is the original project's.
+
 ### Not changed
 
 - macOS still says Apple couldn't check the app for malware the first time it opens: that goes away only with an Apple Developer ID and notarization. Until then: open it once, then **System Settings → Privacy & Security → Open Anyway**.

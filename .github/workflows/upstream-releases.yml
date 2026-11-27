@@ -1,0 +1,164 @@
+# This fork follows the original project's stable releases (anefzaoui/misterdownloadmanager).
+# Every Monday, and by hand (Actions -> Upstream releases -> Run workflow), it looks at the
+# original's latest release. When mac-native doesn't have it yet, it merges it on a branch
+# upstream/vX.Y.Z, sets this fork's version (the original's patch number x100 + 1:
+# 0.5.3 -> 0.5.301), opens a pull request into mac-native and starts CI on the branch.
+# Nothing is merged into mac-native or published by itself: a person reviews the pull request,
+# merges it, then publishes with Release -> Run workflow -> "Publish a release".
+#
+# When the merge conflicts beyond what it settles by itself (the version line, Cargo.lock,
+# CHANGELOG.md and the English catalog, i18n/en.tsv), the branch is the original's release as
+# it is and the pull request says to resolve the conflicts.
+#
+# Needs: Settings -> Actions -> General -> "Allow GitHub Actions to create and approve pull
+# requests", and mac-native as the default branch (a schedule runs on the default branch only).
+name: Upstream releases
+
+on:
+  schedule:
+    - cron: "17 3 * * 1" # Mondays 03:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write # the upstream/vX.Y.Z branch
+  pull-requests: write # its pull request
+  actions: write # starting CI on it
+
+concurrency:
+  group: upstream-releases
+  cancel-in-progress: false
+
+jobs:
+  follow:
+    if: github.repository != 'anefzaoui/misterdownloadmanager'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      UPSTREAM: anefzaoui/misterdownloadmanager
+      BASE: mac-native
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: mac-native
+          fetch-depth: 0
+
+      - name: The original's latest release
+        id: latest
+        run: |
+          set -euo pipefail
+          # "latest": GitHub's latest published release, never a draft or a pre-release.
+          tag=$(gh api "repos/$UPSTREAM/releases/latest" --jq .tag_name)
+          if [[ ! $tag =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::notice::The original's latest release is $tag, not vX.Y.Z: nothing to do."
+            echo "todo=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          upstream="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+          fork="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$(( BASH_REMATCH[3] * 100 + 1 ))"
+          branch="upstream/$tag"
+          # Its commit only: no tag of the original's is brought into this repository.
+          git fetch --no-tags "https://github.com/$UPSTREAM" "refs/tags/$tag:refs/upstream/$tag"
+          if git merge-base --is-ancestor "refs/upstream/$tag" HEAD; then
+            echo "::notice::$BASE has the original's $tag already."
+            echo "todo=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          # Once per release: a pull request for it, open or closed, means it was offered.
+          if [ "$(gh pr list --head "$branch" --state all --json number --jq length)" != "0" ]; then
+            echo "::notice::A pull request for $tag exists already."
+            echo "todo=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if git ls-remote --exit-code origin "refs/heads/$branch" > /dev/null; then
+            echo "::notice::The branch $branch exists already."
+            echo "todo=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          {
+            echo "todo=true"; echo "tag=$tag"; echo "upstream=$upstream"
+            echo "fork=$fork"; echo "branch=$branch"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Merge it on a branch
+        id: merge
+        if: steps.latest.outputs.todo == 'true'
+        env:
+          TAG: ${{ steps.latest.outputs.tag }}
+          UPSTREAM_VERSION: ${{ steps.latest.outputs.upstream }}
+          FORK_VERSION: ${{ steps.latest.outputs.fork }}
+          BRANCH: ${{ steps.latest.outputs.branch }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          set_version() {
+            sed -i -E '0,/^version = "[^"]+"/s//version = "'"$1"'"/' Cargo.toml
+            cargo metadata --format-version 1 > /dev/null # Cargo.lock follows
+          }
+          # The version line is changed on both sides: this fork's is set to the original's
+          # first, so that line merges cleanly; it becomes this fork's once merged.
+          set_version "$UPSTREAM_VERSION"
+          git commit -qam "Version $UPSTREAM_VERSION before merging the original's $TAG"
+          # CHANGELOG.md: both sides' new lines are kept (this fork's section, the original's).
+          attrs=$(git rev-parse --git-path info/attributes); mkdir -p "$(dirname "$attrs")"
+          echo "CHANGELOG.md merge=union" >> "$attrs"
+          clean=true
+          if ! git merge --no-ff --no-edit -m "Merge the original's $TAG" "refs/upstream/$TAG"; then
+            # Generated files are made again rather than merged; anything else is for a person.
+            for f in $(git diff --name-only --diff-filter=U); do
+              case "$f" in
+                Cargo.lock|i18n/en.tsv) git checkout --theirs -- "$f"; git add "$f" ;;
+                *) clean=false ;;
+              esac
+            done
+            if [ "$clean" = true ]; then
+              cargo metadata --format-version 1 > /dev/null
+              python3 tools/i18n/extract.py
+              git add -A Cargo.lock i18n/en.tsv
+              git commit -q --no-edit
+            else
+              git diff --name-only --diff-filter=U > /tmp/conflicts.txt
+              git merge --abort
+            fi
+          fi
+          if [ "$clean" = true ]; then
+            set_version "$FORK_VERSION"
+            python3 tools/i18n/extract.py
+            git add -A Cargo.toml Cargo.lock i18n/en.tsv
+            git commit -qm "Version $FORK_VERSION: the original's $TAG in this fork"
+            git push origin "$BRANCH"
+          else
+            # The original's release as it is: the pull request shows the conflicts to resolve.
+            git push origin "refs/upstream/$TAG:refs/heads/$BRANCH"
+          fi
+          echo "clean=$clean" >> "$GITHUB_OUTPUT"
+
+      - name: Pull request and CI
+        if: steps.latest.outputs.todo == 'true'
+        env:
+          TAG: ${{ steps.latest.outputs.tag }}
+          FORK_VERSION: ${{ steps.latest.outputs.fork }}
+          BRANCH: ${{ steps.latest.outputs.branch }}
+          CLEAN: ${{ steps.merge.outputs.clean }}
+        run: |
+          set -euo pipefail
+          notes="https://github.com/$UPSTREAM/releases/tag/$TAG"
+          if [ "$CLEAN" = true ]; then
+            title="The original's $TAG, as $FORK_VERSION"
+            body="The original project released [$TAG]($notes). This branch merges it into \`$BASE\` and sets this fork's version to **$FORK_VERSION**.
+
+          CI was started on \`$BRANCH\` (Actions -> CI). When it passes:
+          1. Look over the original's changes for anything that touches what this fork changed (the Liquid Glass theme, the menu bar, quarantine, updates from this fork).
+          2. Add a \`## [$FORK_VERSION]\` section at the top of CHANGELOG.md for the release notes.
+          3. Merge this pull request.
+          4. Actions -> Release -> Run workflow on \`$BASE\`, tick **Publish a release**: it publishes v$FORK_VERSION, signed with this fork's key."
+          else
+            title="The original's $TAG (conflicts to resolve)"
+            body="The original project released [$TAG]($notes). Merging it into \`$BASE\` conflicts in:
+
+          \`\`\`
+          $(cat /tmp/conflicts.txt)
+          \`\`\`
+
+          This branch is the original's release as it is. Resolve the conflicts here (or ask Claude), set the version in Cargo.toml to **$FORK_VERSION**, run CI on the result, then merge and publish with Actions -> Release -> Run workflow -> **Publish a release**."
+          fi
+          gh pr create --base "$BASE" --head "$BRANCH" --title "$title" --body "$body"
+          # A pull request opened with this token starts no workflow by itself: CI is started here.
+          gh workflow run ci.yml --ref "$BRANCH"

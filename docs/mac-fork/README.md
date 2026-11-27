@@ -9,6 +9,7 @@ This fork ([MiteshYV/misterdownloadmanager](https://github.com/MiteshYV/misterdo
 - **Liquid Glass** is the default theme on a Mac. The window sits on the system's own glass (macOS 26), with the older frosted blur on earlier versions.
 - **A sidebar** holds the library (All Downloads, Downloading, Completed, Paused & Queued), the categories and **Quarantine**. Selection is a rounded band, without tree lines.
 - **The toolbar** is grouped into capsule buttons (add, grab links · start, pause, delete · scheduler, options) with a search field.
+- **The app icon** is the mascot made of glass on Apple's rounded square (`art/macos/AppIcon.png`, drawn by `tools/art/mac_icon.py`), also the browser add-on's icon.
 - **File-type icons** come from [Lucide](https://lucide.dev) (ISC licence): 53 icons for videos, music, documents, archives, programs, torrents and more.
 - **Progress** shows as a thin bar in each row, with the state in words under it: Downloading, Paused, Queued, Complete, Held in quarantine.
 - **View → Theme** switches back to any other theme.

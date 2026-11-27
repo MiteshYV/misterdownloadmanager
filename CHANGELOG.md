@@ -11,6 +11,8 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 - **The browser add-on on a Mac looks like the Mac app**: the download button over videos is a frosted glass capsule in the Mac's blue, with round buttons and a glass menu of rounded rows; the toolbar popup has soft glass surfaces, a segmented control for its tabs, capsule buttons, the Mac's switches and focus ring, and the system's font, in light and dark. Windows and Linux keep their look. It comes with this release's `-extension-chromium.zip` (load it unpacked): the Chrome Web Store's copy is the original project's.
 
+- **A new icon in Apple's style**: the mascot, the globe in its top hat, made of glass (a sheen, a rim of light, a little see-through) on Apple's rounded square, in the Dock, Finder and on the installer disk, and as the browser add-on's icon everywhere. Windows and Linux keep the original app icon.
+
 ### Not changed
 
 - macOS still says Apple couldn't check the app for malware the first time it opens: that goes away only with an Apple Developer ID and notarization. Until then: open it once, then **System Settings → Privacy & Security → Open Anyway**.
